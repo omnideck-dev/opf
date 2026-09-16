@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# hooks/pre-commit - fast local security scan before a commit lands.
+#
+# NOT enabled by cloning this repo - git never reads hooks/ automatically.
+# Enable it once per clone with:
+#   git config core.hooksPath hooks
+# scripts/pack-doctor.sh checks for exactly this and can fix it for you.
+#
+# This is a convenience layer, not a security boundary: it is bypassed by
+# `git commit --no-verify`, and it is not enabled on a clone until someone
+# runs the command above. The actual enforced gate is CI
+# (ci/pack-scan.gitlab-ci.yml / .github/workflows/scan.yml) - this hook is
+# complementary fast feedback, catching an issue before it's committed
+# (which matters most for secrets: once a secret is in git history,
+# removing it needs a rewrite, not a follow-up commit) rather than a
+# replacement for the CI gate.
+#
+# Scans the pack root's current on-disk content (not a staged-only
+# checkout of the index) - a good approximation for the common case, not a
+# precise "exactly what this commit contains" scan.
+#
+# Locates opf-core the same way every OPF skill does: the OPF_CORE
+# environment variable. A pre-commit hook cannot meaningfully prompt
+# interactively (many commits run non-interactively, e.g. from a GUI
+# client), so a missing OPF_CORE degrades to a NOTE and lets the commit
+# through, rather than blocking every commit on missing configuration.
+# Deliberately does NOT run `semgrep --config auto`: that needs network
+# access to semgrep's registry and is best-effort even in CI - wrong fit
+# for a hook that should be fast and work offline.
+#
+set -uo pipefail
+
+PACK_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -z "$PACK_DIR" ]]; then
+  echo "pre-commit: not inside a git work tree; skipping OPF scan." >&2
+  exit 0
+fi
+
+errors=0
+
+if [[ -n "${OPF_CORE:-}" && -x "$OPF_CORE/scripts/validate-pack.sh" ]]; then
+  "$OPF_CORE/scripts/validate-pack.sh" "$PACK_DIR"
+  rc=$?
+  if [[ $rc -eq 1 ]]; then
+    echo "pre-commit: validate-pack.sh reported error(s) (above); commit refused." >&2
+    errors=$((errors + 1))
+  fi
+  # rc == 2 (warnings only) is printed above and does not block the commit,
+  # matching the spec's warning severity: flagged, not refused.
+else
+  echo "pre-commit NOTE: OPF_CORE not set (or validate-pack.sh missing); skipping structural validation. Set OPF_CORE to your opf-core checkout for full local scanning." >&2
+fi
+
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks detect --source "$PACK_DIR" --no-banner --redact; then
+    echo "pre-commit: gitleaks detected likely secrets (above); commit refused." >&2
+    errors=$((errors + 1))
+  fi
+else
+  echo "pre-commit NOTE: gitleaks not installed; skipping secrets scan." >&2
+fi
+
+if [[ -n "${OPF_CORE:-}" ]] && command -v semgrep >/dev/null 2>&1; then
+  RULESET="$OPF_CORE/ci/semgrep-opf-rules.yml"
+  if [[ -f "$RULESET" ]]; then
+    if ! semgrep scan --config "$RULESET" --severity ERROR --error --quiet "$PACK_DIR"; then
+      echo "pre-commit: semgrep (curated OPF ruleset) reported an error-class finding (above); commit refused." >&2
+      errors=$((errors + 1))
+    fi
+  else
+    echo "pre-commit NOTE: curated OPF ruleset not found at $RULESET; skipping dangerous-pattern scan." >&2
+  fi
+else
+  echo "pre-commit NOTE: semgrep not installed (or OPF_CORE not set); skipping dangerous-pattern scan." >&2
+fi
+
+if [[ $errors -gt 0 ]]; then
+  echo "pre-commit: $errors check(s) failed. Fix the issue(s) above, or bypass with 'git commit --no-verify' if you are certain (not recommended)." >&2
+  exit 1
+fi
+
+exit 0

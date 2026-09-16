@@ -79,7 +79,12 @@ the opf-core paths above only to locate the tooling itself.
 
 6. **Point the user at the next steps.** Tell them to run
    `bash <opf-core>/scripts/validate-pack.sh <pack-dir>`. CI scanning is
-   already wired up by the template - no separate step needed.
+   already wired up by the template - no separate step needed. If/when
+   they `git init` this pack (this skill does not do that for them - see
+   `pack-release`'s notes on why), tell them to also run `git config
+   core.hooksPath hooks` once, to enable the pre-commit scan the template
+   ships at `hooks/pre-commit`. `pack-doctor` checks for exactly this and
+   can fix it later if it's ever missed (for example after a fresh clone).
 
 ## Notes
 
@@ -89,6 +94,12 @@ the opf-core paths above only to locate the tooling itself.
   `.env`. It also ships `.github/workflows/scan.yml` and `.gitlab-ci.yml`,
   both already wired to opf-core's scan template - a new pack is CI-green on
   first push with no configuration.
+- The template also ships `hooks/pre-commit`, a local pre-commit scan
+  (validate-pack.sh + gitleaks + the curated semgrep ruleset, each skipped
+  gracefully if not available). It is NOT enabled by cloning the repo - git
+  never reads `hooks/` on its own - see step 6. It is fast local feedback,
+  never a substitute for the CI gate: it's bypassed by `--no-verify` and
+  degrades to whatever's installed, same as install-time scanning does.
 - The scaffolder refuses to create a pack that contains likely secrets unless
   `--allow-secrets` is passed at the user's explicit risk.
 

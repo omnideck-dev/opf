@@ -59,6 +59,12 @@
 #     explicitly says a harness MUST reject a range it cannot parse rather
 #     than guess, and this tool does not implement one); found/not-found
 #     and the versions on each side are reported so a human can judge.
+#   - pre-commit hook wiring: if the pack is a git repo and ships
+#     hooks/pre-commit (from templates/pack-z-template/), is
+#     core.hooksPath actually set to "hooks" for THIS clone? git never
+#     reads hooks/ on its own, so a fresh clone or a co-maintainer's
+#     checkout silently gets none of the hook's protection until this is
+#     set - a one-line, always-safe fix.
 #
 # What this does NOT do: install anything, run any pack's install.sh, move
 # any pack, or resolve a dependency that's missing. Moving a pack between
@@ -76,7 +82,11 @@ VALIDATOR="$SCRIPT_DIR/validate-pack.sh"
 CHECKSUMS_SCRIPT="$SCRIPT_DIR/compute-pack-checksums.py"
 
 usage() {
-  sed -n '2,70p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  # Print the header comment (lines 2 through the line before `set -...`)
+  # rather than a hardcoded line range: a fixed range silently goes stale
+  # - and cuts --help off mid-sentence - every time the header comment
+  # grows, which it has more than once.
+  awk 'NR==1 {next} /^set -/ {exit} {sub(/^# ?/, ""); print}' "${BASH_SOURCE[0]}"
 }
 
 OWNED_ROOTS=()
@@ -377,6 +387,27 @@ for pack in packs:
                 f"version(s): {versions} - range satisfaction not evaluated, verify manually",
             )
 
+    # --- (f) pre-commit hook shipped but not wired for this clone -----------
+    git_marker = os.path.join(pack_dir, ".git")
+    hook_script = os.path.join(pack_dir, "hooks", "pre-commit")
+    if os.path.exists(git_marker) and os.path.isfile(hook_script):
+        try:
+            out = subprocess.run(
+                ["git", "-C", pack_dir, "config", "--get", "core.hooksPath"],
+                capture_output=True, text=True, timeout=5,
+            )
+            configured = out.stdout.strip().rstrip("/") if out.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            configured = None
+        if configured != "hooks":
+            add(
+                "warning",
+                "this pack ships hooks/pre-commit (a local pre-commit security scan) but "
+                "core.hooksPath is not set to 'hooks' for this clone, so git never runs it - "
+                "a fresh clone or a co-maintainer's checkout needs this set once",
+            )
+            pack_fixes.append({"type": "set_hooks_path", "path": pack_dir})
+
     results.append({"path": pack_dir, "vendor": vendor, "name": name, "findings": findings, "fixes": pack_fixes})
     fixes.extend({**f, "pack": name} for f in pack_fixes)
 
@@ -453,6 +484,8 @@ for f in data["fixes"]:
         a, b = f["native_path"], ""
     elif t == "remove_stale_lock":
         a, b = f["path"], ""
+    elif t == "set_hooks_path":
+        a, b = f["path"], ""
     else:
         continue
     print(pack + "\t" + t + "\t" + a + "\t" + b)
@@ -501,6 +534,13 @@ apply_fixes() {
         echo "Removed stale lock $a"
         applied=1
         ;;
+      set_hooks_path)
+        confirm "Enable the pre-commit hook for $pack_name (git config core.hooksPath hooks in $a) ?" \
+          || { echo "Skipped $pack_name."; continue; }
+        git -C "$a" config core.hooksPath hooks
+        echo "Set core.hooksPath=hooks for $a"
+        applied=1
+        ;;
     esac
   done < <(fixes_of_type "$out_path" "$@")
   return $((1 - applied))
@@ -519,9 +559,10 @@ if [[ $FIX -eq 1 ]]; then
   # Dangling-symlink removal before symlink creation, re-scanning between:
   # removing a dangling symlink can turn an item's status from "dangling"
   # to "missing," which only a fresh scan recognizes as a create_symlink
-  # fix. remove_stale_lock has no such ordering dependency on anything, so
-  # it rides along with whichever phase runs first.
-  if apply_fixes "$REPORT_JSON" remove_symlink remove_stale_lock; then
+  # fix. remove_stale_lock and set_hooks_path have no such ordering
+  # dependency on anything, so they ride along with whichever phase runs
+  # first.
+  if apply_fixes "$REPORT_JSON" remove_symlink remove_stale_lock set_hooks_path; then
     run_scan "$REPORT_JSON"
   fi
   apply_fixes "$REPORT_JSON" create_symlink || true

@@ -1,15 +1,16 @@
 ---
 name: pack-doctor
-description: Scan installed packs for placement, registration, lock, and dependency problems; report them in plain language; and fix the safe ones with explicit approval.
+description: Scan installed packs for placement, registration, lock, hook-wiring, and dependency problems; report them in plain language; and fix the safe ones with explicit approval.
 ---
 
 # pack-doctor
 
-Diagnose the packs installed on this system: are they in the right place
-for their trust tier, are their skills/tools/routines/agents actually
-registered so the harness can see them, does `.opf-lock` still match
-on-disk content, and are declared dependencies findable. Report findings
-in plain language, then offer to fix the safe ones.
+Diagnose the packs installed on this system: are their skills/tools/
+routines/agents actually registered so the harness can see them, does
+`.opf-lock` still match on-disk content, are declared dependencies
+findable, and is each pack's pre-commit security hook actually turned on
+for this clone. Report findings in plain language, then offer to fix the
+safe ones.
 
 The canonical example this skill exists for: a pack sitting in the wrong
 place can leave its skills unregistered - the harness never sees them, and
@@ -54,10 +55,11 @@ recommendation, not a universal location):
    script's own explanations (they already cite the relevant spec section)
    as your source of truth, but shorten them. Group findings by what the
    fix would be:
-   - **Fixable now** (`create_symlink`, `remove_symlink`, `remove_stale_lock`
-     in the script's fix list): "this skill isn't registered" or "this pack
-     has a leftover install lock from before it was claimed - I can fix
-     this."
+   - **Fixable now** (`create_symlink`, `remove_symlink`, `remove_stale_lock`,
+     `set_hooks_path` in the script's fix list): "this skill isn't
+     registered," "this pack has a leftover install lock from before it
+     was claimed," or "this pack ships a pre-commit security hook but it's
+     not turned on for this clone" - I can fix any of these.
    - **Needs your decision, not fixable by this skill**: a naming
      collision (spec `opf-host-layout.md` Section 1.6 - two packs both
      have an item with the same id; ask the user which one to rename),
@@ -97,6 +99,13 @@ recommendation, not a universal location):
   owned pack (a claim that moved the pack but never cleaned up the lock);
   removing the lock is always safe because Owned packs are never supposed
   to carry one.
+- A pack that ships `hooks/pre-commit` (the template's local pre-commit
+  security scan) but has `core.hooksPath` unset for this clone is flagged
+  and fixed the same way (`git config core.hooksPath hooks`) - a one-line,
+  always-safe fix, since it only changes which folder git checks for
+  hooks, not the pack's content. This is the mechanical answer to "git
+  never re-enables a hook on a fresh clone": run `pack-doctor` after
+  cloning a pack you'll be committing to.
 - A naming collision (two packs' native-tree entries for the same item id
   pointing at different packs) is never auto-fixed, even with `--yes`: the
   script reports it as an error and expects a human to choose which pack
