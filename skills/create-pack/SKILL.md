@@ -39,10 +39,13 @@ the opf-core paths above only to locate the tooling itself.
    - **owner(s)**: who maintains this pack, kept to one or a small named few
      (`opf-pack-boundaries.md` Section 2) - purely for the README note in
      step 4, not a file OPF checks for anything. If the user is unsure
-     whether this should be a new pack, an addition to an existing one, or
-     a dependency-only bundle pack, see `<opf-core>/spec/opf-pack-boundaries.md`
-     before scaffolding - splitting later is more work than deciding well
-     up front.
+     whether this should be a pack at all, a new pack, an addition to an
+     existing one, or a dependency-only bundle pack, see
+     `<opf-core>/spec/opf-pack-authoring.md` (what belongs in a pack versus
+     the tool it drives or the user's workspace, and Section 9 on creating a
+     pack only once it has content) and `<opf-core>/spec/opf-pack-boundaries.md`
+     (dividing work across several packs) before scaffolding - splitting
+     later is more work than deciding well up front.
 
 2. **Run the scaffolder.** From the directory where the new pack should be
    created, run `bash <opf-core>/scripts/new-pack.sh <name> [vendor] -d
@@ -94,6 +97,10 @@ the opf-core paths above only to locate the tooling itself.
   `.env`. It also ships `.github/workflows/scan.yml` and `.gitlab-ci.yml`,
   both already wired to opf-core's scan template - a new pack is CI-green on
   first push with no configuration.
+- The template's README already ships an "Install" section covering
+  consumer-facing install and dependency behavior (use `pack-install`,
+  not a hand copy; only it resolves declared `dependencies`) - no separate
+  step needed to document that for a new pack.
 - The template also ships `hooks/pre-commit`, a local pre-commit scan
   (validate-pack.sh + gitleaks + the curated semgrep ruleset, each skipped
   gracefully if not available). It is NOT enabled by cloning the repo - git
@@ -103,4 +110,4 @@ the opf-core paths above only to locate the tooling itself.
 - The scaffolder refuses to create a pack that contains likely secrets unless
   `--allow-secrets` is passed at the user's explicit risk.
 
-See `spec/opf-spec-v1.md` for the pack format and Section 7 for scanning, and `spec/opf-pack-boundaries.md` for pack sizing, ownership, and the bundle-pack pattern.
+See `spec/opf-spec-v1.md` for the pack format and Section 7 for scanning, `spec/opf-pack-authoring.md` for whether something should be a pack at all and what belongs inside one, and `spec/opf-pack-boundaries.md` for pack sizing, ownership, and the bundle-pack pattern.

@@ -12,6 +12,16 @@ Open work items for opf-core. The OPF v1 spec is frozen in `spec/`; this list tr
 
 ## Spec and docs
 
+- [x] Added `opf-pack-authoring.md`: non-normative guidance on whether something should be a
+  pack at all - the four-homes split (tool/pack/workspace/docs), structural vs. editorial
+  data, why installed-and-locked means user-edited content can never live in a pack, when
+  pack data should move to external retrieval instead, the attention cost of installing a
+  pack (distinct from ordinary package management), the three pack namespaces, versioning
+  across a pack/driven-tool boundary, and creating a pack only once it has content. Sits
+  upstream of `opf-pack-boundaries.md` (which assumes you've already decided to build a
+  pack) - cross-linked from it, from `opf-spec-v1.md`'s companions line, from the README
+  docs table and "Using this repo" pointer, and from `create-pack`'s pack-vs-workspace and
+  new-vs-existing-pack decision points.
 - [ ] Repo is currently under the personal `rlnorthcutt` GitHub account; move to the `omnideck-dev` org once the spec/tooling is stable, and update all references in the same pass: schema `$id` (`schema/v1/manifest.schema.json`, currently the placeholder `opf-core/opf-core`), the CI template defaults (`ci/pack-scan.gitlab-ci.yml` `OPF_CORE_REPO`, `.github/workflows/scan.yml` `opf-core-repo` input), AND the template's own CI callers (`templates/pack-z-template/.github/workflows/scan.yml`'s `uses:` and `templates/pack-z-template/.gitlab-ci.yml`'s `remote:`), which currently all default to `rlnorthcutt/opf-core`
 - [ ] Mark `opf-plan-v2.md` and `pack-spec-v2.md` (older drafts in a separate artifacts folder) as superseded or delete them, so nobody implements from the wrong document
 - [ ] Add a rationale/design-decisions appendix if adopters ask for the why behind choices (TOML rejection, no permissions block, etc.)

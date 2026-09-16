@@ -18,6 +18,19 @@ See `spec/opf-spec-v1.md` in the opf-core repository for the format.
 - `hooks/pre-commit` - a local pre-commit security scan (fast feedback, not
   a substitute for CI - see below).
 
+## Install
+
+Install this pack with the `pack-install` skill, or `scripts/install-pack.sh`
+for a harness that runs scripts but not skills - never by copying this
+folder by hand. If `manifest.json` declares `dependencies`, only
+`pack-install` resolves the closure (installing each one first, in order,
+per spec Section 4.5); `install-pack.sh` alone does not - it installs only
+this pack and prints a `NOTE` about the skipped dependencies. Either way
+requires opf-core's tooling to be reachable by your harness (a checkout,
+with `OPF_CORE` set if your harness needs it) - see opf-core's own README
+for that one-time setup. If a dependency's skills don't show up after
+install, run `pack-doctor` to diagnose why.
+
 ## Validate
 
 ```

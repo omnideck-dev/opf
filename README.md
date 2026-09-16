@@ -41,6 +41,7 @@ opf-core ships the spec, the reference tooling, and four operator skills.
 |---|---|
 | [`spec/opf-spec-v1.md`](spec/opf-spec-v1.md) | The normative spec: manifest schema, pack layout, lifecycle scripts, the security-scanning contract. |
 | [`spec/opf-host-layout.md`](spec/opf-host-layout.md) | Non-normative: recommended on-disk layout, the Owned/External trust tier, distribution topology for an adopting org. |
+| [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) | Non-normative: whether something should be a pack at all, structural vs. editorial data, the locked-pack/user-workspace boundary, naming. |
 | [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) | Non-normative: how to decide what goes in one pack vs. several, ownership, the bundle-pack pattern. |
 | [`schema/v1/manifest.schema.json`](schema/v1/manifest.schema.json) | The JSON Schema every `manifest.json` validates against. |
 | [`TODO.md`](TODO.md) | Open implementation and ecosystem work. |
@@ -62,7 +63,7 @@ See spec Section 7 and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Sect
 
 Two ways to adopt opf-core, and they compose - most orgs start with the first and add the second once they outgrow the defaults.
 
-**1. Install it into your harness, then make and share packs.** Point your harness at this repo (a git-native harness with skill auto-discovery needs nothing more than the clone; otherwise set the `OPF_CORE` environment variable to the checkout path). No fork needed. Skim [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) before scaffolding your first few packs - deciding what goes in one pack versus several is cheaper to get right up front than to split apart later.
+**1. Install it into your harness, then make and share packs.** Point your harness at this repo (a git-native harness with skill auto-discovery needs nothing more than the clone; otherwise set the `OPF_CORE` environment variable to the checkout path). No fork needed. Skim [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) and [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) before scaffolding your first few packs - deciding what should be a pack at all, and what goes in one pack versus several, is cheaper to get right up front than to split apart later.
 
 **2. Fork and adapt it for your team or org.** opf-core is public and harness-agnostic by design - forking is expected, not a workaround. Common adaptations (all documented in [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2):
 

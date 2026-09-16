@@ -4,6 +4,8 @@
 **Format version:** OPF v1 (`pack_format: 1`)
 **Scope:** How to decide what goes in one pack versus several, and how to keep a pack's ownership from decaying into a group nobody can be accountable to. Nothing here is enforced by the validator or the schema; a pack of any size or ownership shape is equally conformant. This is judgment, not a rule - the guidance below is what tends to work.
 
+**Companion document:** [`opf-pack-authoring.md`](./opf-pack-authoring.md) sits upstream of this one: whether something should be a pack at all, what belongs inside it versus in the tool it drives or the user's own workspace, and how to name and grow a pack once it exists. Read that first if you haven't yet decided what you're building; this document assumes you have and covers dividing the result across several packs.
+
 ---
 
 ## 1. Why this needs guidance at all

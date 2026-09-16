@@ -3,7 +3,7 @@
 **Status:** Normative specification
 **Format version:** OPF v1 (`pack_format: 1`)
 **Scope:** A harness-agnostic pack standard. Any agent harness, CLI tool, or editor can adopt the format.
-**Companions:** `opf-host-layout.md` (non-normative) carries the recommended host layout profile and the distribution topology. `opf-pack-boundaries.md` (non-normative) carries guidance on pack sizing, ownership, and the bundle-pack pattern - a judgment call the spec deliberately does not constrain. Where this spec points to a companion doc, the details live there.
+**Companions:** `opf-host-layout.md` (non-normative) carries the recommended host layout profile and the distribution topology. `opf-pack-authoring.md` (non-normative) carries guidance on whether something should be a pack at all and what belongs inside one versus in the tool it drives or the user's own workspace. `opf-pack-boundaries.md` (non-normative) carries guidance on pack sizing, ownership, and the bundle-pack pattern - a judgment call the spec deliberately does not constrain. Where this spec points to a companion doc, the details live there.
 
 **Hard requirement: zero native pack code.** OPF requires no harness-native pack features. Validation, scanning, install, and state tracking are all performed by scripts and skills that any harness able to run shell commands and skills can execute. A harness needs no native pack code to install, update, or remove a pack.
 
