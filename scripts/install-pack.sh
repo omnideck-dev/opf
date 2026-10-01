@@ -268,6 +268,17 @@ echo "==> Scanning staged pack"
 scan_errors=0
 scan_warnings=0
 
+# Shared by every tool-outcome check below: bumps the given counter
+# (scan_errors or scan_warnings) and sets the given per-tool result
+# variable to $3, unless it's already "error" - an error finding always
+# wins over a later warning for the same tool, never the reverse.
+record_finding() {
+  local -n _result="$1"
+  local -n _counter="$2"
+  [[ "$_result" == "error" ]] || _result="$3"
+  _counter=$((_counter + 1))
+}
+
 # Per-tool scan outcome, recorded into .opf-lock's "scan" block (spec Section
 # 9.1) so a consumer can tell from the lock alone whether the full scan ran,
 # rather than inferring it from absence. "error" is not a possible recorded
@@ -301,24 +312,50 @@ if command -v semgrep >/dev/null 2>&1; then
     SCAN_SEMGREP_CURATED_RESULT="clean"
     SCAN_SEMGREP_CURATED_REASON=""
     echo "--- semgrep (curated OPF ruleset) ---"
-    semgrep scan --config "$OPF_RULESET" --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR" || true
-    if ! semgrep scan --config "$OPF_RULESET" --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
+    # One invocation, not three: --quiet still prints findings (it only
+    # suppresses banners/progress), and --json-output writes the same scan's
+    # structured results to a file alongside that text, so the ERROR/WARNING
+    # severities present can be read back without re-running semgrep per
+    # severity (spec Section 7.1 only needs to know whether each severity
+    # class is present, not match counts). A nonzero exit here (with no
+    # --error flag, this can only mean semgrep itself failed to run, not
+    # "findings exist" - verified empirically) or unparseable JSON is
+    # treated as an error-class failure: a scan that didn't run is not a
+    # clean one (spec Section 7.1's "no silent clean bill of health").
+    # Placed beside the staging directory (a location this script already
+    # knows is writable), not via plain `mktemp`'s default $TMPDIR: this
+    # script must not trust ambient environment state it didn't itself set
+    # (same reasoning as the attacker-influenced data_dir handling above) -
+    # an invoking shell with a stale or nonexistent $TMPDIR would otherwise
+    # make the installer itself fail before it ever gets to scanning.
+    SEMGREP_JSON_OUT="$(mktemp "$INSTALL_PARENT/.opf-scan-json.XXXXXX")"
+    semgrep_curated_rc=0
+    semgrep scan --config "$OPF_RULESET" --quiet --json-output="$SEMGREP_JSON_OUT" --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR" || semgrep_curated_rc=$?
+    read -r semgrep_has_error semgrep_has_warning < <(python3 - "$SEMGREP_JSON_OUT" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        data = json.load(fh)
+    severities = {r.get("extra", {}).get("severity") for r in data.get("results", [])}
+except (OSError, ValueError):
+    print("1 1")  # unparseable output: fail closed on both severities
+else:
+    print(f"{1 if 'ERROR' in severities else 0} {1 if 'WARNING' in severities else 0}")
+PY
+    )
+    rm -f "$SEMGREP_JSON_OUT"
+    if [[ $semgrep_curated_rc -ne 0 ]]; then
+      echo "ERROR: semgrep (curated OPF ruleset) exited $semgrep_curated_rc; treating a failed scan as an error, not a clean one." >&2
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_errors error
+    elif [[ "$semgrep_has_error" == "1" ]]; then
       echo "ERROR: semgrep (curated OPF ruleset) reported an error-class finding (above); refusing to install." >&2
-      scan_errors=$((scan_errors + 1))
-      SCAN_SEMGREP_CURATED_RESULT="error"
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_errors error
     fi
-    # The printed run above (no --severity filter) shows WARNING-severity
-    # curated findings (e.g. opf-system-path-write, opf-crontab-edit,
-    # opf-dynamic-shell-true-python) to the user, but printing is not
-    # acknowledgment: spec Section 7.1 requires a warning-class finding to
-    # block until the user explicitly confirms. Check WARNING severity on
-    # its own (disjoint from the ERROR check above, which already handled
-    # and counted ERROR-severity findings) so these actually gate on confirm()
-    # below instead of silently scrolling past.
-    if ! semgrep scan --config "$OPF_RULESET" --severity WARNING --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
+    # spec Section 7.1 requires a warning-class finding to block until the
+    # user explicitly confirms; printing it (above) is not acknowledgment.
+    if [[ "$semgrep_has_warning" == "1" ]]; then
       echo "WARNING: semgrep (curated OPF ruleset) reported a warning-class finding (above)."
-      scan_warnings=$((scan_warnings + 1))
-      [[ "$SCAN_SEMGREP_CURATED_RESULT" == "error" ]] || SCAN_SEMGREP_CURATED_RESULT="warning"
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_warnings warning
     fi
   else
     echo "NOTE: curated OPF ruleset not found at $OPF_RULESET; skipping it."
@@ -331,8 +368,7 @@ if command -v semgrep >/dev/null 2>&1; then
     echo "WARNING: warnings requiring acknowledgment, since the auto ruleset is not"
     echo "WARNING: curated to OPF's dangerous-pattern categories (the curated OPF"
     echo "WARNING: ruleset above is the hard block for those)."
-    scan_warnings=$((scan_warnings + 1))
-    SCAN_SEMGREP_REGISTRY_RESULT="warning"
+    record_finding SCAN_SEMGREP_REGISTRY_RESULT scan_warnings warning
   fi
 else
   echo "NOTE: semgrep not installed; skipping dangerous-pattern static analysis."
@@ -342,8 +378,7 @@ if command -v gitleaks >/dev/null 2>&1; then
   SCAN_GITLEAKS_VERSION="$(gitleaks version 2>/dev/null | head -n1)"
   if ! gitleaks detect --source "$STAGING_DIR" --no-git --redact -v; then
     echo "ERROR: gitleaks detected likely secrets in the staged pack; refusing to install." >&2
-    scan_errors=$((scan_errors + 1))
-    SCAN_GITLEAKS_RESULT="error"
+    record_finding SCAN_GITLEAKS_RESULT scan_errors error
   else
     SCAN_GITLEAKS_RESULT="clean"
     SCAN_GITLEAKS_REASON=""
@@ -532,6 +567,11 @@ def tool_entry(result, reason, version=None, ruleset=None):
     entry = {"result": result}
     if version:
         entry["version"] = version
+    # `ruleset` is attached whenever one is named, including a "skipped"
+    # result (e.g. semgrep not installed): spec Section 9.1 asks for "the
+    # ruleset reference" as its own always-present field, separate from the
+    # per-tool outcome - it says which ruleset this entry is FOR, not that
+    # the ruleset ran. `result` is what says whether it ran.
     if ruleset:
         entry["ruleset"] = ruleset
     if result == "skipped" and reason:
