@@ -445,14 +445,30 @@ if [[ -f "$INSTALL_SCRIPT" ]]; then
   if [[ ${#config_env_assignments[@]} -gt 0 ]]; then
     ENV_ARGS+=("${config_env_assignments[@]}")
   fi
+  # A small, explicitly safe allowlist beyond PACK_*/config: none of these
+  # can carry a credential, and their absence causes real (not security-
+  # relevant) breakage in otherwise-correct install.sh scripts - TMPDIR-
+  # aware temp-file creation on a sandbox where plain /tmp isn't writable,
+  # locale-dependent tools misbehaving under no locale at all, TERM-aware
+  # output. Forwarded only when the installer's own environment actually
+  # sets them, so nothing is fabricated.
+  for safe_var in TMPDIR LANG LC_ALL TERM; do
+    [[ -n "${!safe_var:-}" ]] && ENV_ARGS+=("$safe_var=${!safe_var}")
+  done
   # env -i: start install.sh from an EMPTY environment, not this process's
-  # inherited one. Spec Section 8.4 enumerates exactly what install.sh
-  # receives (the PACK_* vars plus declared config values); the installer's
-  # own environment commonly carries things install.sh has no business
-  # seeing (CI secrets, cloud/API tokens, SSH agent sockets). Without -i,
-  # `env` only overlays ENV_ARGS onto the inherited environment rather than
-  # replacing it, so every one of those would otherwise be readable to an
-  # install.sh that just runs `env` or `printenv`.
+  # inherited one, plus exactly ENV_ARGS above. That is PATH and HOME
+  # (both forwarded from the invoking shell - install.sh cannot function
+  # without a PATH to resolve commands on, and many tools misbehave with
+  # no HOME at all; neither is a credential, but note this is a stricter
+  # read than spec Section 8.4's literal list, which names only the PACK_*
+  # vars and declared config), the small allowlist above, and the PACK_*/
+  # config values spec Section 8.4 actually documents. The installer's own
+  # environment commonly carries things beyond all of that which install.sh
+  # has no business seeing (CI secrets, cloud/API tokens, SSH agent
+  # sockets). Without -i, `env` only overlays ENV_ARGS onto the inherited
+  # environment rather than replacing it, so every one of those would
+  # otherwise be readable to an install.sh that just runs `env` or
+  # `printenv`.
   set +e
   env -i "${ENV_ARGS[@]}" bash -c 'cd "$PACK_ROOT" && exec ./install.sh'
   install_rc=$?

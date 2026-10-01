@@ -95,11 +95,15 @@ isn't a meaningful gate, so OPF doesn't pretend it is. Instead:
 - Nothing runs without explicit approval (`confirm()` in
   `scripts/install-pack.sh`). Run it non-interactively with no `--yes` and
   it refuses rather than silently proceeding - it fails closed, not open.
-- `install.sh` runs from an **empty environment** plus exactly what spec
-  Section 8.4 documents (the `PACK_*` variables and declared `config`
-  values) - not whatever happens to be exported in the shell that invoked
-  the installer. A CI job's deploy token or your own `SSH_AUTH_SOCK` isn't
-  there for the script to find.
+- `install.sh` runs from an **empty environment**, not whatever happens to
+  be exported in the shell that invoked the installer - a CI job's deploy
+  token or your own `SSH_AUTH_SOCK` isn't there for the script to find.
+  What it does get: spec Section 8.4's `PACK_*` variables and declared
+  `config` values, `PATH`/`HOME` forwarded from the invoking shell (the
+  script can't resolve commands or behave sanely without them, and
+  neither can carry a credential), and a small non-secret allowlist
+  (`TMPDIR`/`LANG`/`LC_ALL`/`TERM`, forwarded only when actually set) kept
+  narrow enough that nothing on it could leak anything sensitive.
 - It still runs as your user, with your filesystem permissions, and can do
   anything your user can do. Approval-plus-diff is the control here, not a
   sandbox. See "What this does not do" below.

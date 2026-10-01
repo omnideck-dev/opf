@@ -450,7 +450,8 @@ set -euo pipefail
 env > "$PACK_ROOT/env.out"
 SCRIPT
 chmod +x env-leak-check/install.sh
-OPF_SMOKETEST_SECRET=supersecret123 "$INSTALL_PACK" env-leak-check env-leak-check-installed --yes >/dev/null 2>&1
+OPF_SMOKETEST_SECRET=supersecret123 TMPDIR=/tmp/opf-smoketest-tmpdir LANG=C.UTF-8 \
+  "$INSTALL_PACK" env-leak-check env-leak-check-installed --yes >/dev/null 2>&1
 if ! grep -q OPF_SMOKETEST_SECRET env-leak-check-installed/env.out 2>/dev/null; then
   pass "install: install.sh does not see an unrelated env var from the installer's shell"
 else
@@ -459,6 +460,12 @@ fi
 grep -q '^PACK_NAME=' env-leak-check-installed/env.out 2>/dev/null \
   && pass "install: install.sh still receives the documented PACK_* variables" \
   || fail "install: install.sh still receives the documented PACK_* variables"
+grep -q '^TMPDIR=/tmp/opf-smoketest-tmpdir$' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh receives TMPDIR when the installer's shell sets it (non-secret allowlist)" \
+  || fail "install: install.sh receives TMPDIR when the installer's shell sets it (non-secret allowlist)"
+grep -q '^LANG=C.UTF-8$' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)" \
+  || fail "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)"
 
 echo
 echo "== install-pack.sh: descriptor scan coverage and scan.exclude (A8/A9) =="
