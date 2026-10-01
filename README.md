@@ -44,6 +44,7 @@ opf-core ships the spec, the reference tooling, and four operator skills.
 | [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) | Non-normative: whether something should be a pack at all, structural vs. editorial data, the locked-pack/user-workspace boundary, naming. |
 | [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) | Non-normative: how to decide what goes in one pack vs. several, ownership, the bundle-pack pattern. |
 | [`schema/v1/manifest.schema.json`](schema/v1/manifest.schema.json) | The JSON Schema every `manifest.json` validates against. |
+| [`SECURITY.md`](SECURITY.md) | Threat model, what's built in vs. what isn't, hardening checklist, vulnerability reporting. |
 | [`TODO.md`](TODO.md) | Open implementation and ecosystem work. |
 
 ## Security
@@ -58,7 +59,7 @@ Every install, and every CI run, passes a deterministic scan first - static anal
 - **`install.sh` runs on an empty environment.** The only thing the one allowed arbitrary-exec step sees is what spec Section 8.4 documents - the `PACK_*` variables and declared `config` values - never whatever secrets happen to be exported in the shell that invoked the installer.
 - **Optional pre-commit hook, for fast local feedback.** The template ships `hooks/pre-commit` (enable once per clone with `git config core.hooksPath hooks`) running the same validator, gitleaks, and curated ruleset before a commit lands. It's convenience, not a security boundary - bypassed by `--no-verify`, and not re-enabled automatically on a fresh clone (`pack-doctor` checks for that and can fix it). CI is still the enforced gate.
 
-See spec Section 7 and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2.6 for the full contract.
+See [`SECURITY.md`](SECURITY.md) for the full write-up (threat model, known limitations, hardening checklist, and how to report a vulnerability), spec Section 7 for the normative contract, and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2.6 for recommended tooling.
 
 ## Using this repo
 
