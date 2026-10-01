@@ -297,6 +297,8 @@ Findings are classified into three severity classes:
 
 The mapping of a specific finding to a severity is the harness's policy, but the three classes exist and `error` findings block by default. Severity decisions (what blocks versus what flags) belong to the harness's install-time policy; the scan itself is purely behavior-based, flagging what scripts DO (credential access found by static analysis), not what a manifest declares. A manifest declaration grants nothing and is not part of OPF. The validator exit-code contract (a machine-readable 0/1/2 mapping onto pass/error/warning) is non-normative and lives in the companion doc (`opf-host-layout.md`, Section 2.4).
 
+**No silent clean bill of health, for any conformance tool.** This applies beyond the install-time scan: any validator, doctor, or diagnostic tool that reports pack conformance MUST treat a required field that is missing, empty, or unparseable as a finding, never as an implicit pass. Exit status alone MUST NOT be relied on to distinguish "checked and clean" from "not checked" — a tool that cannot evaluate a check MUST say so, not stay silent.
+
 ### 7.2 Cross-language dangerous patterns
 
 Independent of language, the scan SHOULD look for these dangerous patterns using `semgrep` (or an equivalent cross-language engine) where available:
@@ -434,9 +436,28 @@ The harness SHOULD record installed state in a file at the pack root named `.opf
 }
 ```
 
-**Provenance.** Provenance is OBSERVED, not declared. `.opf-lock` records the resolved source at install time: the repository URL AND commit SHA, or the zip path, or the local path. Vendor identity is declared in the manifest (Section 4.2) and is not verified; provenance is what the lock records.
+**Provenance.** Provenance is OBSERVED, not declared. `.opf-lock` records the resolved source at install time, via a `source.type` of `git`, `archive`, or `local`:
+
+- `git`: `{"type": "git", "url": ..., "commit": ...}` — the repository URL and commit SHA.
+- `archive`: `{"type": "archive", "path": ..., "digest": "sha256:..."}` — the archive's filename/path and a content digest, since a digest is the only integrity handle available when there is no commit to record.
+- `local`: `{"type": "local", "path": ...}` — a path on the installing machine, no VCS or archive origin.
+
+Vendor identity is declared in the manifest (Section 4.2) and is not verified; provenance is what the lock records.
+
+**Delivery mechanism does not affect trust tier.** A pack installed from a zip archive is External exactly as a pack installed from git is: Section 1.3 of the host-layout doc already establishes that tier follows the action (installed vs. created/claimed), not the source, and that holds regardless of what kind of source it was. An archive with no git remote also has no update path (no sync, no drift-refusal-on-pull): the locked-by-default guarantee is enforced only by the documented convention that the consumer doesn't edit it, not by any live channel back to a publisher. Treat archive delivery as a degraded channel: installable, but without git's ongoing integrity story.
 
 The checksums cover pack content. Installer-written state files (`.opf-lock`, `.opf-env`) are EXCLUDED from checksums: they are written after the scan and change post-install. The lock file stays inside the pack root and is gitignored. Because runtime data lives outside the pack root (Section 5.2), the pack root should not change after install, so the checksums cover the whole pack root meaningfully. The size and type exclusions in Section 7.3 apply to content scanning only, not to checksums. Checksums detect modification of the INSTALLED copy between install and a later update (tampering or drift); they are NOT compared against the source repo on update, because content changing at a fixed version is normal under a rolling-release workflow. The harness MAY verify checksums on update to detect tampering between install and update.
+
+**Recording the scan outcome.** `.opf-lock` SHOULD also record what the Section 7 scan actually did — which tools ran, their versions, the ruleset reference, and a per-tool outcome (or an explicit `"skipped"` when a tool was unavailable, per the graceful-degradation contract in the host-layout companion doc, Section 2.6):
+
+```json
+"scan": {
+  "semgrep": { "version": "1.78.0", "ruleset": "opf-core-v1", "result": "clean" },
+  "gitleaks": { "result": "skipped", "reason": "not installed" }
+}
+```
+
+Without this, graceful degradation to the structural floor (manifest schema and path-safety checks, which always run) is silent: nothing in the installed pack or the install output reveals that the scanning layer never ran. A consumer should be able to tell from `.opf-lock` alone whether the full scan ran, not have to infer it from absence.
 
 ### 9.2 Rolling release profile
 
