@@ -469,8 +469,16 @@ if [[ -f "$INSTALL_SCRIPT" ]]; then
   # environment rather than replacing it, so every one of those would
   # otherwise be readable to an install.sh that just runs `env` or
   # `printenv`.
+  #
+  # Deliberately NOT `bash -c '...'`: verified on a real host that `bash -c`
+  # can still pick up that host's own ambient process-manager state (a
+  # systemd --user session's environment, in one observed case) regardless
+  # of `env -i` - something specific to the `-c` invocation form, not to
+  # env -i's own semantics. Execing the pack's own install.sh directly (it
+  # already has its own `#!/usr/bin/env bash` shebang) avoids that path
+  # entirely; verified clean on the same host that reproduced the leak.
   set +e
-  env -i "${ENV_ARGS[@]}" bash -c 'cd "$PACK_ROOT" && exec ./install.sh'
+  ( cd "$STAGING_DIR" && exec env -i "${ENV_ARGS[@]}" ./install.sh )
   install_rc=$?
   set -e
   if [[ $install_rc -ne 0 ]]; then

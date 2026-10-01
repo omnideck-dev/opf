@@ -466,6 +466,27 @@ grep -q '^TMPDIR=/tmp/opf-smoketest-tmpdir$' env-leak-check-installed/env.out 2>
 grep -q '^LANG=C.UTF-8$' env-leak-check-installed/env.out 2>/dev/null \
   && pass "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)" \
   || fail "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)"
+# Closed-allowlist check, not just "one named secret is absent": this is
+# what actually would have caught a real regression found during review,
+# where `bash -c '...'` (the previous invocation form) picked up this host's
+# own ambient systemd --user session state (shell-theme and libguestfs
+# variables) despite `env -i`, something a single-variable absence check
+# does not exercise at all.
+python3 -c "
+names = set()
+with open('env-leak-check-installed/env.out') as fh:
+    for line in fh:
+        if '=' in line:
+            names.add(line.split('=', 1)[0])
+allowed = {
+    'PATH', 'HOME', 'PACK_ROOT', 'PACK_NAME', 'PACK_DATA_DIR', 'PACK_VERSION',
+    'PACK_INSTALL_DIR', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'PWD', 'SHLVL', '_',
+}
+unexpected = names - allowed
+import sys
+sys.exit(1 if unexpected else 0)
+" && pass "install: install.sh's environment contains no names outside the documented allowlist" \
+  || fail "install: install.sh's environment contains no names outside the documented allowlist"
 
 echo
 echo "== install-pack.sh: descriptor scan coverage and scan.exclude (A8/A9) =="
