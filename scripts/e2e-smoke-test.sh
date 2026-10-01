@@ -397,6 +397,39 @@ expect_exit "install: refuses a pack containing a likely secret" 1 \
   "$INSTALL_PACK" secret-in-pack secret-in-pack-installed --yes
 
 echo
+echo "== install-pack.sh: curated-ruleset WARNING findings require confirmation =="
+if command -v semgrep >/dev/null 2>&1; then
+  cp -R golden warn-only
+  mkdir -p warn-only/data
+  echo "crontab -e" > warn-only/data/note.txt
+  expect_exit "install: a warning-class curated finding (no --yes, no tty) refuses pending confirmation" 1 \
+    "$INSTALL_PACK" warn-only warn-only-installed
+  expect_exit "install: the same pack proceeds once the warning is acknowledged with --yes" 0 \
+    "$INSTALL_PACK" warn-only warn-only-installed --yes
+else
+  echo "SKIPPED: curated-ruleset WARNING confirmation check (semgrep not installed)"
+fi
+
+echo
+echo "== install-pack.sh: install.sh does not inherit the installer's unrelated environment =="
+cp -R golden env-leak-check
+cat > env-leak-check/install.sh <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+env > "$PACK_ROOT/env.out"
+SCRIPT
+chmod +x env-leak-check/install.sh
+OPF_SMOKETEST_SECRET=supersecret123 "$INSTALL_PACK" env-leak-check env-leak-check-installed --yes >/dev/null 2>&1
+if ! grep -q OPF_SMOKETEST_SECRET env-leak-check-installed/env.out 2>/dev/null; then
+  pass "install: install.sh does not see an unrelated env var from the installer's shell"
+else
+  fail "install: install.sh does not see an unrelated env var from the installer's shell"
+fi
+grep -q '^PACK_NAME=' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh still receives the documented PACK_* variables" \
+  || fail "install: install.sh still receives the documented PACK_* variables"
+
+echo
 echo "== install-pack.sh: descriptor scan coverage and scan.exclude (A8/A9) =="
 if command -v semgrep >/dev/null 2>&1; then
   cp -R golden evil-tool-json

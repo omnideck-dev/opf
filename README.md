@@ -55,6 +55,7 @@ Every install, and every CI run, passes a deterministic scan first - static anal
 - **Registry ruleset - best-effort.** `semgrep --config auto` also runs, as a supplementary, non-blocking pass (it needs network access to semgrep's registry, which not every environment has).
 - **Secrets scanning.** `gitleaks` where it's installed, a regex fallback where it isn't - either way, a pack containing a likely secret is refused.
 - **Three severities, one contract.** `error` blocks install. `warning` requires explicit acknowledgment. `info` is recorded and shown, never blocking. The same validator and the same rules run on your machine and in CI, so what passes locally passes the pipeline.
+- **`install.sh` runs on an empty environment.** The only thing the one allowed arbitrary-exec step sees is what spec Section 8.4 documents - the `PACK_*` variables and declared `config` values - never whatever secrets happen to be exported in the shell that invoked the installer.
 - **Optional pre-commit hook, for fast local feedback.** The template ships `hooks/pre-commit` (enable once per clone with `git config core.hooksPath hooks`) running the same validator, gitleaks, and curated ruleset before a commit lands. It's convenience, not a security boundary - bypassed by `--no-verify`, and not re-enabled automatically on a fresh clone (`pack-doctor` checks for that and can fix it). CI is still the enforced gate.
 
 See spec Section 7 and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2.6 for the full contract.

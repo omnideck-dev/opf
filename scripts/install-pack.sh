@@ -288,6 +288,18 @@ if command -v semgrep >/dev/null 2>&1; then
       echo "ERROR: semgrep (curated OPF ruleset) reported an error-class finding (above); refusing to install." >&2
       scan_errors=$((scan_errors + 1))
     fi
+    # The printed run above (no --severity filter) shows WARNING-severity
+    # curated findings (e.g. opf-system-path-write, opf-crontab-edit,
+    # opf-dynamic-shell-true-python) to the user, but printing is not
+    # acknowledgment: spec Section 7.1 requires a warning-class finding to
+    # block until the user explicitly confirms. Check WARNING severity on
+    # its own (disjoint from the ERROR check above, which already handled
+    # and counted ERROR-severity findings) so these actually gate on confirm()
+    # below instead of silently scrolling past.
+    if ! semgrep scan --config "$OPF_RULESET" --severity WARNING --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
+      echo "WARNING: semgrep (curated OPF ruleset) reported a warning-class finding (above)."
+      scan_warnings=$((scan_warnings + 1))
+    fi
   else
     echo "NOTE: curated OPF ruleset not found at $OPF_RULESET; skipping it."
   fi
@@ -404,8 +416,16 @@ if [[ -f "$INSTALL_SCRIPT" ]]; then
   if [[ ${#config_env_assignments[@]} -gt 0 ]]; then
     ENV_ARGS+=("${config_env_assignments[@]}")
   fi
+  # env -i: start install.sh from an EMPTY environment, not this process's
+  # inherited one. Spec Section 8.4 enumerates exactly what install.sh
+  # receives (the PACK_* vars plus declared config values); the installer's
+  # own environment commonly carries things install.sh has no business
+  # seeing (CI secrets, cloud/API tokens, SSH agent sockets). Without -i,
+  # `env` only overlays ENV_ARGS onto the inherited environment rather than
+  # replacing it, so every one of those would otherwise be readable to an
+  # install.sh that just runs `env` or `printenv`.
   set +e
-  env "${ENV_ARGS[@]}" bash -c 'cd "$PACK_ROOT" && exec ./install.sh'
+  env -i "${ENV_ARGS[@]}" bash -c 'cd "$PACK_ROOT" && exec ./install.sh'
   install_rc=$?
   set -e
   if [[ $install_rc -ne 0 ]]; then
