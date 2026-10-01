@@ -268,6 +268,21 @@ echo "==> Scanning staged pack"
 scan_errors=0
 scan_warnings=0
 
+# Per-tool scan outcome, recorded into .opf-lock's "scan" block (spec Section
+# 9.1) so a consumer can tell from the lock alone whether the full scan ran,
+# rather than inferring it from absence. "error" is not a possible recorded
+# result: any error-class finding below aborts the install (scan_errors
+# check, further down) before .opf-lock is ever written, so only "clean",
+# "warning", and "skipped" are reachable at that point.
+SCAN_SEMGREP_VERSION=""
+SCAN_SEMGREP_CURATED_RESULT="skipped"
+SCAN_SEMGREP_CURATED_REASON="semgrep not installed"
+SCAN_SEMGREP_REGISTRY_RESULT="skipped"
+SCAN_SEMGREP_REGISTRY_REASON="semgrep not installed"
+SCAN_GITLEAKS_VERSION=""
+SCAN_GITLEAKS_RESULT="skipped"
+SCAN_GITLEAKS_REASON="not installed"
+
 # scan.exclude (spec Section 7.3) applies to content scanning ONLY, never to
 # secrets scanning (gitleaks, below) or structural validation (already run).
 # resolve-scan-excludes.py pre-filters out any matched path that is an
@@ -281,12 +296,16 @@ done < <(python3 "$SCRIPT_DIR/resolve-scan-excludes.py" "$MANIFEST" "$STAGING_DI
 
 OPF_RULESET="$SCRIPT_DIR/../ci/semgrep-opf-rules.yml"
 if command -v semgrep >/dev/null 2>&1; then
+  SCAN_SEMGREP_VERSION="$(semgrep --version 2>/dev/null | head -n1)"
   if [[ -f "$OPF_RULESET" ]]; then
+    SCAN_SEMGREP_CURATED_RESULT="clean"
+    SCAN_SEMGREP_CURATED_REASON=""
     echo "--- semgrep (curated OPF ruleset) ---"
     semgrep scan --config "$OPF_RULESET" --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR" || true
     if ! semgrep scan --config "$OPF_RULESET" --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
       echo "ERROR: semgrep (curated OPF ruleset) reported an error-class finding (above); refusing to install." >&2
       scan_errors=$((scan_errors + 1))
+      SCAN_SEMGREP_CURATED_RESULT="error"
     fi
     # The printed run above (no --severity filter) shows WARNING-severity
     # curated findings (e.g. opf-system-path-write, opf-crontab-edit,
@@ -299,25 +318,35 @@ if command -v semgrep >/dev/null 2>&1; then
     if ! semgrep scan --config "$OPF_RULESET" --severity WARNING --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
       echo "WARNING: semgrep (curated OPF ruleset) reported a warning-class finding (above)."
       scan_warnings=$((scan_warnings + 1))
+      [[ "$SCAN_SEMGREP_CURATED_RESULT" == "error" ]] || SCAN_SEMGREP_CURATED_RESULT="warning"
     fi
   else
     echo "NOTE: curated OPF ruleset not found at $OPF_RULESET; skipping it."
+    SCAN_SEMGREP_CURATED_REASON="curated ruleset file not found"
   fi
+  SCAN_SEMGREP_REGISTRY_RESULT="clean"
+  SCAN_SEMGREP_REGISTRY_REASON=""
   if ! semgrep scan --config auto --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
     echo "WARNING: semgrep (registry auto ruleset) reported findings (above). Treated as"
     echo "WARNING: warnings requiring acknowledgment, since the auto ruleset is not"
     echo "WARNING: curated to OPF's dangerous-pattern categories (the curated OPF"
     echo "WARNING: ruleset above is the hard block for those)."
     scan_warnings=$((scan_warnings + 1))
+    SCAN_SEMGREP_REGISTRY_RESULT="warning"
   fi
 else
   echo "NOTE: semgrep not installed; skipping dangerous-pattern static analysis."
 fi
 
 if command -v gitleaks >/dev/null 2>&1; then
+  SCAN_GITLEAKS_VERSION="$(gitleaks version 2>/dev/null | head -n1)"
   if ! gitleaks detect --source "$STAGING_DIR" --no-git --redact -v; then
     echo "ERROR: gitleaks detected likely secrets in the staged pack; refusing to install." >&2
     scan_errors=$((scan_errors + 1))
+    SCAN_GITLEAKS_RESULT="error"
+  else
+    SCAN_GITLEAKS_RESULT="clean"
+    SCAN_GITLEAKS_REASON=""
   fi
 else
   echo "NOTE: gitleaks not installed; falling back to a pattern grep for likely secrets"
@@ -446,10 +475,17 @@ if git -C "$SOURCE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || true)"
 fi
 
-python3 - "$SCRIPT_DIR/compute-pack-checksums.py" "$STAGING_DIR" "$PACK_NAME" "$PACK_VERSION" "$INSTALL_DIR" "$PACK_DATA_DIR" "$SOURCE_TYPE" "$SOURCE_URL" "$SOURCE_COMMIT" "$SOURCE_DIR" <<'PY'
+python3 - "$SCRIPT_DIR/compute-pack-checksums.py" "$STAGING_DIR" "$PACK_NAME" "$PACK_VERSION" "$INSTALL_DIR" "$PACK_DATA_DIR" "$SOURCE_TYPE" "$SOURCE_URL" "$SOURCE_COMMIT" "$SOURCE_DIR" \
+  "$SCAN_SEMGREP_VERSION" "$SCAN_SEMGREP_CURATED_RESULT" "$SCAN_SEMGREP_CURATED_REASON" \
+  "$SCAN_SEMGREP_REGISTRY_RESULT" "$SCAN_SEMGREP_REGISTRY_REASON" \
+  "$SCAN_GITLEAKS_VERSION" "$SCAN_GITLEAKS_RESULT" "$SCAN_GITLEAKS_REASON" <<'PY'
 import json, os, subprocess, sys, datetime
 
-compute_checksums_script, staging, name, version, install_dir, data_dir, source_type, source_url, source_commit, source_dir = sys.argv[1:11]
+(compute_checksums_script, staging, name, version, install_dir, data_dir,
+ source_type, source_url, source_commit, source_dir,
+ semgrep_version, semgrep_curated_result, semgrep_curated_reason,
+ semgrep_registry_result, semgrep_registry_reason,
+ gitleaks_version, gitleaks_result, gitleaks_reason) = sys.argv[1:19]
 
 checksums = json.loads(subprocess.run(
     [sys.executable, compute_checksums_script, staging],
@@ -464,6 +500,26 @@ if source_commit:
 if source_type == "local":
     source["path"] = source_dir
 
+# Recorded per spec Section 9.1 so graceful degradation (spec Section 7,
+# host-layout Section 2.6) is visible from .opf-lock alone rather than
+# inferred from absence. "error" never appears here: an error-class finding
+# aborts the install before this script runs at all.
+def tool_entry(result, reason, version=None, ruleset=None):
+    entry = {"result": result}
+    if version:
+        entry["version"] = version
+    if ruleset:
+        entry["ruleset"] = ruleset
+    if result == "skipped" and reason:
+        entry["reason"] = reason
+    return entry
+
+scan = {
+    "semgrep": tool_entry(semgrep_curated_result, semgrep_curated_reason, semgrep_version, "opf-core-v1"),
+    "semgrep_registry": tool_entry(semgrep_registry_result, semgrep_registry_reason, semgrep_version, "auto"),
+    "gitleaks": tool_entry(gitleaks_result, gitleaks_reason, gitleaks_version),
+}
+
 lock = {
     "name": name,
     "version": version,
@@ -472,6 +528,7 @@ lock = {
     "dependencies": [],
     "data_dir": data_dir,
     "checksums": checksums,
+    "scan": scan,
 }
 
 with open(os.path.join(staging, ".opf-lock"), "w") as fh:

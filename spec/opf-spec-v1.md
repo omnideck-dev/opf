@@ -453,9 +453,12 @@ The checksums cover pack content. Installer-written state files (`.opf-lock`, `.
 ```json
 "scan": {
   "semgrep": { "version": "1.78.0", "ruleset": "opf-core-v1", "result": "clean" },
+  "semgrep_registry": { "version": "1.78.0", "ruleset": "auto", "result": "clean" },
   "gitleaks": { "result": "skipped", "reason": "not installed" }
 }
 ```
+
+The two `semgrep` entries are distinct because Section 7's scan runs semgrep twice against two different configs with two different consequences: `semgrep` is the curated, offline, CI-blocking ruleset (Section 7.2); `semgrep_registry` is the supplementary registry `auto` config, which only ever warns (Section 7.3's "Network usage is NOT a gate" sibling rule - a runner unable to reach the registry must not fail the pipeline on that). A `result` of `"error"` is not actually reachable in a written `.opf-lock`: an error-class finding aborts the install before the lock is written at all, so only `"clean"`, `"warning"`, and `"skipped"` appear in practice.
 
 Without this, graceful degradation to the structural floor (manifest schema and path-safety checks, which always run) is silent: nothing in the installed pack or the install output reveals that the scanning layer never ran. A consumer should be able to tell from `.opf-lock` alone whether the full scan ran, not have to infer it from absence.
 

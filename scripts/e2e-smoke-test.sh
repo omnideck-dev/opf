@@ -245,6 +245,31 @@ d = json.load(open('golden-installed/.opf-lock'))
 sys.exit(0 if d.get('checksums') and 'manifest.json' in d['checksums'] else 1)
 " && pass "install: .opf-lock records checksums including manifest.json" \
     || fail "install: .opf-lock records checksums including manifest.json"
+  python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+scan = d.get('scan') or {}
+missing = [t for t in ('semgrep', 'semgrep_registry', 'gitleaks') if t not in scan]
+bad = [t for t, e in scan.items() if not isinstance(e, dict) or 'result' not in e]
+sys.exit(0 if not missing and not bad else 1)
+" && pass "install: .opf-lock records a scan block with a result per known tool" \
+    || fail "install: .opf-lock records a scan block with a result per known tool"
+  if command -v semgrep >/dev/null 2>&1; then
+    python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+sys.exit(0 if d['scan']['semgrep'].get('result') == 'clean' and d['scan']['semgrep'].get('version') else 1)
+" && pass "install: .opf-lock records a clean semgrep result with a version when semgrep is installed" \
+      || fail "install: .opf-lock records a clean semgrep result with a version when semgrep is installed"
+  else
+    python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+e = d['scan']['semgrep']
+sys.exit(0 if e.get('result') == 'skipped' and e.get('reason') and 'version' not in e else 1)
+" && pass "install: .opf-lock records semgrep as skipped, with a reason and no version, when unavailable" \
+      || fail "install: .opf-lock records semgrep as skipped, with a reason and no version, when unavailable"
+  fi
 else
   fail "install: .opf-lock exists after install"
 fi
@@ -406,6 +431,12 @@ if command -v semgrep >/dev/null 2>&1; then
     "$INSTALL_PACK" warn-only warn-only-installed
   expect_exit "install: the same pack proceeds once the warning is acknowledged with --yes" 0 \
     "$INSTALL_PACK" warn-only warn-only-installed --yes
+  python3 -c "
+import json, sys
+d = json.load(open('warn-only-installed/.opf-lock'))
+sys.exit(0 if d['scan']['semgrep'].get('result') == 'warning' else 1)
+" && pass "install: .opf-lock records the acknowledged curated-ruleset warning as 'warning', not 'clean'" \
+    || fail "install: .opf-lock records the acknowledged curated-ruleset warning as 'warning', not 'clean'"
 else
   echo "SKIPPED: curated-ruleset WARNING confirmation check (semgrep not installed)"
 fi
