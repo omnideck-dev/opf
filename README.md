@@ -1,4 +1,4 @@
-# opf
+# Open Pack Format (OPF)
 
 [![opf self-test](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml/badge.svg)](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml)
 [![OPF spec](https://img.shields.io/badge/OPF--spec-v1-blueviolet.svg)](spec/opf-spec-v1.md)
