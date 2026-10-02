@@ -11,7 +11,7 @@
 # Or copy this file into your pack's .gitlab-ci.yml.
 #
 # The opf-core repo (which provides the validator) is cloned from
-# OPF_CORE_REPO (default https://github.com/rlnorthcutt/opf-core.git).
+# OPF_CORE_REPO (default https://github.com/omnideck-dev/opf.git).
 # The validator step always runs; a missing validator is a hard failure.
 #
 # This job installs shellcheck, semgrep, and gitleaks itself rather than
@@ -38,7 +38,7 @@ pack-scan:
   stage: scan
   image: python:3.12-slim
   variables:
-    OPF_CORE_REPO: "https://github.com/rlnorthcutt/opf-core.git"
+    OPF_CORE_REPO: "https://github.com/omnideck-dev/opf.git"
     SHELLCHECK_VERSION: "0.10.0"
     GITLEAKS_VERSION: "8.21.2"
   before_script:

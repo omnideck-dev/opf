@@ -2,4 +2,4 @@
 # gitleaks). Do not duplicate that logic here - bump the ref below if you need
 # a different opf-core checkout.
 include:
-  - remote: 'https://raw.githubusercontent.com/rlnorthcutt/opf-core/main/ci/pack-scan.gitlab-ci.yml'
+  - remote: 'https://raw.githubusercontent.com/omnideck-dev/opf/main/ci/pack-scan.gitlab-ci.yml'

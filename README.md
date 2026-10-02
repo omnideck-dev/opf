@@ -1,8 +1,8 @@
 # opf-core
 
-[![opf-core self-test](https://github.com/rlnorthcutt/opf-core/actions/workflows/self-test.yml/badge.svg)](https://github.com/rlnorthcutt/opf-core/actions/workflows/self-test.yml)
+[![opf-core self-test](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml/badge.svg)](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml)
 [![OPF spec](https://img.shields.io/badge/OPF--spec-v1-blueviolet.svg)](spec/opf-spec-v1.md)
-[![License: Apache 2.0](https://img.shields.io/github/license/rlnorthcutt/opf-core)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/github/license/omnideck-dev/opf)](LICENSE)
 
 **A harness-agnostic package format for AI agent skills, tools, data, and routines** - bundled into one portable, versioned unit that installs the same way everywhere, with security scanning built in rather than bolted on.
 
