@@ -268,6 +268,32 @@ echo "==> Scanning staged pack"
 scan_errors=0
 scan_warnings=0
 
+# Shared by every tool-outcome check below: bumps the given counter
+# (scan_errors or scan_warnings) and sets the given per-tool result
+# variable to $3, unless it's already "error" - an error finding always
+# wins over a later warning for the same tool, never the reverse.
+record_finding() {
+  local -n _result="$1"
+  local -n _counter="$2"
+  [[ "$_result" == "error" ]] || _result="$3"
+  _counter=$((_counter + 1))
+}
+
+# Per-tool scan outcome, recorded into .opf-lock's "scan" block (spec Section
+# 9.1) so a consumer can tell from the lock alone whether the full scan ran,
+# rather than inferring it from absence. "error" is not a possible recorded
+# result: any error-class finding below aborts the install (scan_errors
+# check, further down) before .opf-lock is ever written, so only "clean",
+# "warning", and "skipped" are reachable at that point.
+SCAN_SEMGREP_VERSION=""
+SCAN_SEMGREP_CURATED_RESULT="skipped"
+SCAN_SEMGREP_CURATED_REASON="semgrep not installed"
+SCAN_SEMGREP_REGISTRY_RESULT="skipped"
+SCAN_SEMGREP_REGISTRY_REASON="semgrep not installed"
+SCAN_GITLEAKS_VERSION=""
+SCAN_GITLEAKS_RESULT="skipped"
+SCAN_GITLEAKS_REASON="not installed"
+
 # scan.exclude (spec Section 7.3) applies to content scanning ONLY, never to
 # secrets scanning (gitleaks, below) or structural validation (already run).
 # resolve-scan-excludes.py pre-filters out any matched path that is an
@@ -281,31 +307,81 @@ done < <(python3 "$SCRIPT_DIR/resolve-scan-excludes.py" "$MANIFEST" "$STAGING_DI
 
 OPF_RULESET="$SCRIPT_DIR/../ci/semgrep-opf-rules.yml"
 if command -v semgrep >/dev/null 2>&1; then
+  SCAN_SEMGREP_VERSION="$(semgrep --version 2>/dev/null | head -n1)"
   if [[ -f "$OPF_RULESET" ]]; then
+    SCAN_SEMGREP_CURATED_RESULT="clean"
+    SCAN_SEMGREP_CURATED_REASON=""
     echo "--- semgrep (curated OPF ruleset) ---"
-    semgrep scan --config "$OPF_RULESET" --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR" || true
-    if ! semgrep scan --config "$OPF_RULESET" --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
+    # One invocation, not three: --quiet still prints findings (it only
+    # suppresses banners/progress), and --json-output writes the same scan's
+    # structured results to a file alongside that text, so the ERROR/WARNING
+    # severities present can be read back without re-running semgrep per
+    # severity (spec Section 7.1 only needs to know whether each severity
+    # class is present, not match counts). A nonzero exit here (with no
+    # --error flag, this can only mean semgrep itself failed to run, not
+    # "findings exist" - verified empirically) or unparseable JSON is
+    # treated as an error-class failure: a scan that didn't run is not a
+    # clean one (spec Section 7.1's "no silent clean bill of health").
+    # Placed beside the staging directory (a location this script already
+    # knows is writable), not via plain `mktemp`'s default $TMPDIR: this
+    # script must not trust ambient environment state it didn't itself set
+    # (same reasoning as the attacker-influenced data_dir handling above) -
+    # an invoking shell with a stale or nonexistent $TMPDIR would otherwise
+    # make the installer itself fail before it ever gets to scanning.
+    SEMGREP_JSON_OUT="$(mktemp "$INSTALL_PARENT/.opf-scan-json.XXXXXX")"
+    semgrep_curated_rc=0
+    semgrep scan --config "$OPF_RULESET" --quiet --json-output="$SEMGREP_JSON_OUT" --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR" || semgrep_curated_rc=$?
+    read -r semgrep_has_error semgrep_has_warning < <(python3 - "$SEMGREP_JSON_OUT" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        data = json.load(fh)
+    severities = {r.get("extra", {}).get("severity") for r in data.get("results", [])}
+except (OSError, ValueError):
+    print("1 1")  # unparseable output: fail closed on both severities
+else:
+    print(f"{1 if 'ERROR' in severities else 0} {1 if 'WARNING' in severities else 0}")
+PY
+    )
+    rm -f "$SEMGREP_JSON_OUT"
+    if [[ $semgrep_curated_rc -ne 0 ]]; then
+      echo "ERROR: semgrep (curated OPF ruleset) exited $semgrep_curated_rc; treating a failed scan as an error, not a clean one." >&2
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_errors error
+    elif [[ "$semgrep_has_error" == "1" ]]; then
       echo "ERROR: semgrep (curated OPF ruleset) reported an error-class finding (above); refusing to install." >&2
-      scan_errors=$((scan_errors + 1))
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_errors error
+    fi
+    # spec Section 7.1 requires a warning-class finding to block until the
+    # user explicitly confirms; printing it (above) is not acknowledgment.
+    if [[ "$semgrep_has_warning" == "1" ]]; then
+      echo "WARNING: semgrep (curated OPF ruleset) reported a warning-class finding (above)."
+      record_finding SCAN_SEMGREP_CURATED_RESULT scan_warnings warning
     fi
   else
     echo "NOTE: curated OPF ruleset not found at $OPF_RULESET; skipping it."
+    SCAN_SEMGREP_CURATED_REASON="curated ruleset file not found"
   fi
+  SCAN_SEMGREP_REGISTRY_RESULT="clean"
+  SCAN_SEMGREP_REGISTRY_REASON=""
   if ! semgrep scan --config auto --error --quiet --exclude .opf-env --exclude .opf-lock "${SCAN_EXCLUDE_ARGS[@]}" "$STAGING_DIR"; then
     echo "WARNING: semgrep (registry auto ruleset) reported findings (above). Treated as"
     echo "WARNING: warnings requiring acknowledgment, since the auto ruleset is not"
     echo "WARNING: curated to OPF's dangerous-pattern categories (the curated OPF"
     echo "WARNING: ruleset above is the hard block for those)."
-    scan_warnings=$((scan_warnings + 1))
+    record_finding SCAN_SEMGREP_REGISTRY_RESULT scan_warnings warning
   fi
 else
   echo "NOTE: semgrep not installed; skipping dangerous-pattern static analysis."
 fi
 
 if command -v gitleaks >/dev/null 2>&1; then
+  SCAN_GITLEAKS_VERSION="$(gitleaks version 2>/dev/null | head -n1)"
   if ! gitleaks detect --source "$STAGING_DIR" --no-git --redact -v; then
     echo "ERROR: gitleaks detected likely secrets in the staged pack; refusing to install." >&2
-    scan_errors=$((scan_errors + 1))
+    record_finding SCAN_GITLEAKS_RESULT scan_errors error
+  else
+    SCAN_GITLEAKS_RESULT="clean"
+    SCAN_GITLEAKS_REASON=""
   fi
 else
   echo "NOTE: gitleaks not installed; falling back to a pattern grep for likely secrets"
@@ -404,8 +480,40 @@ if [[ -f "$INSTALL_SCRIPT" ]]; then
   if [[ ${#config_env_assignments[@]} -gt 0 ]]; then
     ENV_ARGS+=("${config_env_assignments[@]}")
   fi
+  # A small, explicitly safe allowlist beyond PACK_*/config: none of these
+  # can carry a credential, and their absence causes real (not security-
+  # relevant) breakage in otherwise-correct install.sh scripts - TMPDIR-
+  # aware temp-file creation on a sandbox where plain /tmp isn't writable,
+  # locale-dependent tools misbehaving under no locale at all, TERM-aware
+  # output. Forwarded only when the installer's own environment actually
+  # sets them, so nothing is fabricated.
+  for safe_var in TMPDIR LANG LC_ALL TERM; do
+    [[ -n "${!safe_var:-}" ]] && ENV_ARGS+=("$safe_var=${!safe_var}")
+  done
+  # env -i: start install.sh from an EMPTY environment, not this process's
+  # inherited one, plus exactly ENV_ARGS above. That is PATH and HOME
+  # (both forwarded from the invoking shell - install.sh cannot function
+  # without a PATH to resolve commands on, and many tools misbehave with
+  # no HOME at all; neither is a credential, but note this is a stricter
+  # read than spec Section 8.4's literal list, which names only the PACK_*
+  # vars and declared config), the small allowlist above, and the PACK_*/
+  # config values spec Section 8.4 actually documents. The installer's own
+  # environment commonly carries things beyond all of that which install.sh
+  # has no business seeing (CI secrets, cloud/API tokens, SSH agent
+  # sockets). Without -i, `env` only overlays ENV_ARGS onto the inherited
+  # environment rather than replacing it, so every one of those would
+  # otherwise be readable to an install.sh that just runs `env` or
+  # `printenv`.
+  #
+  # Deliberately NOT `bash -c '...'`: verified on a real host that `bash -c`
+  # can still pick up that host's own ambient process-manager state (a
+  # systemd --user session's environment, in one observed case) regardless
+  # of `env -i` - something specific to the `-c` invocation form, not to
+  # env -i's own semantics. Execing the pack's own install.sh directly (it
+  # already has its own `#!/usr/bin/env bash` shebang) avoids that path
+  # entirely; verified clean on the same host that reproduced the leak.
   set +e
-  env "${ENV_ARGS[@]}" bash -c 'cd "$PACK_ROOT" && exec ./install.sh'
+  ( cd "$STAGING_DIR" && exec env -i "${ENV_ARGS[@]}" ./install.sh )
   install_rc=$?
   set -e
   if [[ $install_rc -ne 0 ]]; then
@@ -426,10 +534,17 @@ if git -C "$SOURCE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || true)"
 fi
 
-python3 - "$SCRIPT_DIR/compute-pack-checksums.py" "$STAGING_DIR" "$PACK_NAME" "$PACK_VERSION" "$INSTALL_DIR" "$PACK_DATA_DIR" "$SOURCE_TYPE" "$SOURCE_URL" "$SOURCE_COMMIT" "$SOURCE_DIR" <<'PY'
+python3 - "$SCRIPT_DIR/compute-pack-checksums.py" "$STAGING_DIR" "$PACK_NAME" "$PACK_VERSION" "$INSTALL_DIR" "$PACK_DATA_DIR" "$SOURCE_TYPE" "$SOURCE_URL" "$SOURCE_COMMIT" "$SOURCE_DIR" \
+  "$SCAN_SEMGREP_VERSION" "$SCAN_SEMGREP_CURATED_RESULT" "$SCAN_SEMGREP_CURATED_REASON" \
+  "$SCAN_SEMGREP_REGISTRY_RESULT" "$SCAN_SEMGREP_REGISTRY_REASON" \
+  "$SCAN_GITLEAKS_VERSION" "$SCAN_GITLEAKS_RESULT" "$SCAN_GITLEAKS_REASON" <<'PY'
 import json, os, subprocess, sys, datetime
 
-compute_checksums_script, staging, name, version, install_dir, data_dir, source_type, source_url, source_commit, source_dir = sys.argv[1:11]
+(compute_checksums_script, staging, name, version, install_dir, data_dir,
+ source_type, source_url, source_commit, source_dir,
+ semgrep_version, semgrep_curated_result, semgrep_curated_reason,
+ semgrep_registry_result, semgrep_registry_reason,
+ gitleaks_version, gitleaks_result, gitleaks_reason) = sys.argv[1:19]
 
 checksums = json.loads(subprocess.run(
     [sys.executable, compute_checksums_script, staging],
@@ -444,6 +559,31 @@ if source_commit:
 if source_type == "local":
     source["path"] = source_dir
 
+# Recorded per spec Section 9.1 so graceful degradation (spec Section 7,
+# host-layout Section 2.6) is visible from .opf-lock alone rather than
+# inferred from absence. "error" never appears here: an error-class finding
+# aborts the install before this script runs at all.
+def tool_entry(result, reason, version=None, ruleset=None):
+    entry = {"result": result}
+    if version:
+        entry["version"] = version
+    # `ruleset` is attached whenever one is named, including a "skipped"
+    # result (e.g. semgrep not installed): spec Section 9.1 asks for "the
+    # ruleset reference" as its own always-present field, separate from the
+    # per-tool outcome - it says which ruleset this entry is FOR, not that
+    # the ruleset ran. `result` is what says whether it ran.
+    if ruleset:
+        entry["ruleset"] = ruleset
+    if result == "skipped" and reason:
+        entry["reason"] = reason
+    return entry
+
+scan = {
+    "semgrep": tool_entry(semgrep_curated_result, semgrep_curated_reason, semgrep_version, "opf-core-v1"),
+    "semgrep_registry": tool_entry(semgrep_registry_result, semgrep_registry_reason, semgrep_version, "auto"),
+    "gitleaks": tool_entry(gitleaks_result, gitleaks_reason, gitleaks_version),
+}
+
 lock = {
     "name": name,
     "version": version,
@@ -452,6 +592,7 @@ lock = {
     "dependencies": [],
     "data_dir": data_dir,
     "checksums": checksums,
+    "scan": scan,
 }
 
 with open(os.path.join(staging, ".opf-lock"), "w") as fh:
