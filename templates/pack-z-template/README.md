@@ -6,7 +6,7 @@ A pack in the Open Pack Format (OPF). A pack is a manifest plus embedded
 files, containing one or more items: skills, tools, data, routines, or
 artifacts. Packs install, update, and remove with zero native harness code.
 
-See `spec/opf-spec-v1.md` in the opf-core repository for the format.
+See `spec/opf-spec-v1.md` in the opf repository for the format.
 
 ## Contents
 
@@ -14,7 +14,7 @@ See `spec/opf-spec-v1.md` in the opf-core repository for the format.
 - `skills/` - skills in this pack.
 - `data/` - data shipped with this pack.
 - `.github/workflows/scan.yml`, `.gitlab-ci.yml` - CI scanning, already wired
-  to opf-core's validator and scan template. No setup needed.
+  to opf's validator and scan template. No setup needed.
 - `hooks/pre-commit` - a local pre-commit security scan (fast feedback, not
   a substitute for CI - see below).
 
@@ -26,8 +26,8 @@ folder by hand. If `manifest.json` declares `dependencies`, only
 `pack-install` resolves the closure (installing each one first, in order,
 per spec Section 4.5); `install-pack.sh` alone does not - it installs only
 this pack and prints a `NOTE` about the skipped dependencies. Either way
-requires opf-core's tooling to be reachable by your harness (a checkout,
-with `OPF_CORE` set if your harness needs it) - see opf-core's own README
+requires opf's tooling to be reachable by your harness (a checkout,
+with `OPF_ROOT` set if your harness needs it) - see opf's own README
 for that one-time setup. If a dependency's skills don't show up after
 install, run `pack-doctor` to diagnose why.
 

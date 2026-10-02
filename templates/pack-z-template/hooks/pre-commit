@@ -20,10 +20,10 @@
 # checkout of the index) - a good approximation for the common case, not a
 # precise "exactly what this commit contains" scan.
 #
-# Locates opf-core the same way every OPF skill does: the OPF_CORE
+# Locates opf the same way every OPF skill does: the OPF_ROOT
 # environment variable. A pre-commit hook cannot meaningfully prompt
 # interactively (many commits run non-interactively, e.g. from a GUI
-# client), so a missing OPF_CORE degrades to a NOTE and lets the commit
+# client), so a missing OPF_ROOT degrades to a NOTE and lets the commit
 # through, rather than blocking every commit on missing configuration.
 # Deliberately does NOT run `semgrep --config auto`: that needs network
 # access to semgrep's registry and is best-effort even in CI - wrong fit
@@ -39,8 +39,8 @@ fi
 
 errors=0
 
-if [[ -n "${OPF_CORE:-}" && -x "$OPF_CORE/scripts/validate-pack.sh" ]]; then
-  "$OPF_CORE/scripts/validate-pack.sh" "$PACK_DIR"
+if [[ -n "${OPF_ROOT:-}" && -x "$OPF_ROOT/scripts/validate-pack.sh" ]]; then
+  "$OPF_ROOT/scripts/validate-pack.sh" "$PACK_DIR"
   rc=$?
   if [[ $rc -eq 1 ]]; then
     echo "pre-commit: validate-pack.sh reported error(s) (above); commit refused." >&2
@@ -49,7 +49,7 @@ if [[ -n "${OPF_CORE:-}" && -x "$OPF_CORE/scripts/validate-pack.sh" ]]; then
   # rc == 2 (warnings only) is printed above and does not block the commit,
   # matching the spec's warning severity: flagged, not refused.
 else
-  echo "pre-commit NOTE: OPF_CORE not set (or validate-pack.sh missing); skipping structural validation. Set OPF_CORE to your opf-core checkout for full local scanning." >&2
+  echo "pre-commit NOTE: OPF_ROOT not set (or validate-pack.sh missing); skipping structural validation. Set OPF_ROOT to your opf checkout for full local scanning." >&2
 fi
 
 if command -v gitleaks >/dev/null 2>&1; then
@@ -61,8 +61,8 @@ else
   echo "pre-commit NOTE: gitleaks not installed; skipping secrets scan." >&2
 fi
 
-if [[ -n "${OPF_CORE:-}" ]] && command -v semgrep >/dev/null 2>&1; then
-  RULESET="$OPF_CORE/ci/semgrep-opf-rules.yml"
+if [[ -n "${OPF_ROOT:-}" ]] && command -v semgrep >/dev/null 2>&1; then
+  RULESET="$OPF_ROOT/ci/semgrep-opf-rules.yml"
   if [[ -f "$RULESET" ]]; then
     if ! semgrep scan --config "$RULESET" --severity ERROR --error --quiet "$PACK_DIR"; then
       echo "pre-commit: semgrep (curated OPF ruleset) reported an error-class finding (above); commit refused." >&2
@@ -72,7 +72,7 @@ if [[ -n "${OPF_CORE:-}" ]] && command -v semgrep >/dev/null 2>&1; then
     echo "pre-commit NOTE: curated OPF ruleset not found at $RULESET; skipping dangerous-pattern scan." >&2
   fi
 else
-  echo "pre-commit NOTE: semgrep not installed (or OPF_CORE not set); skipping dangerous-pattern scan." >&2
+  echo "pre-commit NOTE: semgrep not installed (or OPF_ROOT not set); skipping dangerous-pattern scan." >&2
 fi
 
 if [[ $errors -gt 0 ]]; then

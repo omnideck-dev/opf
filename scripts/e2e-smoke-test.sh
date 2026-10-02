@@ -26,7 +26,7 @@ VALIDATE="$SCRIPT_DIR/validate-pack.sh"
 INSTALL_PACK="$SCRIPT_DIR/install-pack.sh"
 BUMP_VERSION="$SCRIPT_DIR/bump-pack-version.sh"
 DOCTOR="$SCRIPT_DIR/pack-doctor.sh"
-OPF_CORE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+OPF_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -245,6 +245,31 @@ d = json.load(open('golden-installed/.opf-lock'))
 sys.exit(0 if d.get('checksums') and 'manifest.json' in d['checksums'] else 1)
 " && pass "install: .opf-lock records checksums including manifest.json" \
     || fail "install: .opf-lock records checksums including manifest.json"
+  python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+scan = d.get('scan') or {}
+missing = [t for t in ('semgrep', 'semgrep_registry', 'gitleaks') if t not in scan]
+bad = [t for t, e in scan.items() if not isinstance(e, dict) or 'result' not in e]
+sys.exit(0 if not missing and not bad else 1)
+" && pass "install: .opf-lock records a scan block with a result per known tool" \
+    || fail "install: .opf-lock records a scan block with a result per known tool"
+  if command -v semgrep >/dev/null 2>&1; then
+    python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+sys.exit(0 if d['scan']['semgrep'].get('result') == 'clean' and d['scan']['semgrep'].get('version') else 1)
+" && pass "install: .opf-lock records a clean semgrep result with a version when semgrep is installed" \
+      || fail "install: .opf-lock records a clean semgrep result with a version when semgrep is installed"
+  else
+    python3 -c "
+import json, sys
+d = json.load(open('golden-installed/.opf-lock'))
+e = d['scan']['semgrep']
+sys.exit(0 if e.get('result') == 'skipped' and e.get('reason') and 'version' not in e else 1)
+" && pass "install: .opf-lock records semgrep as skipped, with a reason and no version, when unavailable" \
+      || fail "install: .opf-lock records semgrep as skipped, with a reason and no version, when unavailable"
+  fi
 else
   fail "install: .opf-lock exists after install"
 fi
@@ -395,6 +420,73 @@ cp -R golden secret-in-pack
 echo "aws_secret_access_key = \"AKIAABCDEFGHIJKLMNOP\"" >> secret-in-pack/README.md
 expect_exit "install: refuses a pack containing a likely secret" 1 \
   "$INSTALL_PACK" secret-in-pack secret-in-pack-installed --yes
+
+echo
+echo "== install-pack.sh: curated-ruleset WARNING findings require confirmation =="
+if command -v semgrep >/dev/null 2>&1; then
+  cp -R golden warn-only
+  mkdir -p warn-only/data
+  echo "crontab -e" > warn-only/data/note.txt
+  expect_exit "install: a warning-class curated finding (no --yes, no tty) refuses pending confirmation" 1 \
+    "$INSTALL_PACK" warn-only warn-only-installed
+  expect_exit "install: the same pack proceeds once the warning is acknowledged with --yes" 0 \
+    "$INSTALL_PACK" warn-only warn-only-installed --yes
+  python3 -c "
+import json, sys
+d = json.load(open('warn-only-installed/.opf-lock'))
+sys.exit(0 if d['scan']['semgrep'].get('result') == 'warning' else 1)
+" && pass "install: .opf-lock records the acknowledged curated-ruleset warning as 'warning', not 'clean'" \
+    || fail "install: .opf-lock records the acknowledged curated-ruleset warning as 'warning', not 'clean'"
+else
+  echo "SKIPPED: curated-ruleset WARNING confirmation check (semgrep not installed)"
+fi
+
+echo
+echo "== install-pack.sh: install.sh does not inherit the installer's unrelated environment =="
+cp -R golden env-leak-check
+cat > env-leak-check/install.sh <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+env > "$PACK_ROOT/env.out"
+SCRIPT
+chmod +x env-leak-check/install.sh
+OPF_SMOKETEST_SECRET=supersecret123 TMPDIR=/tmp/opf-smoketest-tmpdir LANG=C.UTF-8 \
+  "$INSTALL_PACK" env-leak-check env-leak-check-installed --yes >/dev/null 2>&1
+if ! grep -q OPF_SMOKETEST_SECRET env-leak-check-installed/env.out 2>/dev/null; then
+  pass "install: install.sh does not see an unrelated env var from the installer's shell"
+else
+  fail "install: install.sh does not see an unrelated env var from the installer's shell"
+fi
+grep -q '^PACK_NAME=' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh still receives the documented PACK_* variables" \
+  || fail "install: install.sh still receives the documented PACK_* variables"
+grep -q '^TMPDIR=/tmp/opf-smoketest-tmpdir$' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh receives TMPDIR when the installer's shell sets it (non-secret allowlist)" \
+  || fail "install: install.sh receives TMPDIR when the installer's shell sets it (non-secret allowlist)"
+grep -q '^LANG=C.UTF-8$' env-leak-check-installed/env.out 2>/dev/null \
+  && pass "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)" \
+  || fail "install: install.sh receives LANG when the installer's shell sets it (non-secret allowlist)"
+# Closed-allowlist check, not just "one named secret is absent": this is
+# what actually would have caught a real regression found during review,
+# where `bash -c '...'` (the previous invocation form) picked up this host's
+# own ambient systemd --user session state (shell-theme and libguestfs
+# variables) despite `env -i`, something a single-variable absence check
+# does not exercise at all.
+python3 -c "
+names = set()
+with open('env-leak-check-installed/env.out') as fh:
+    for line in fh:
+        if '=' in line:
+            names.add(line.split('=', 1)[0])
+allowed = {
+    'PATH', 'HOME', 'PACK_ROOT', 'PACK_NAME', 'PACK_DATA_DIR', 'PACK_VERSION',
+    'PACK_INSTALL_DIR', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'PWD', 'SHLVL', '_',
+}
+unexpected = names - allowed
+import sys
+sys.exit(1 if unexpected else 0)
+" && pass "install: install.sh's environment contains no names outside the documented allowlist" \
+  || fail "install: install.sh's environment contains no names outside the documented allowlist"
 
 echo
 echo "== install-pack.sh: descriptor scan coverage and scan.exclude (A8/A9) =="
@@ -612,12 +704,12 @@ json.dump(m, open('hook-pack/manifest.json', 'w'))
   git init -q
   git config core.hooksPath hooks
   git add -A
-  unset OPF_CORE
+  unset OPF_ROOT
   git -c user.email=test@test -c user.name=test commit -q -m "initial"
 )
 [[ $? -eq 0 ]] \
-  && pass "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)" \
-  || fail "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)"
+  && pass "hook: a commit succeeds when OPF_ROOT is unset (graceful degradation, not a hard failure)" \
+  || fail "hook: a commit succeeds when OPF_ROOT is unset (graceful degradation, not a hard failure)"
 
 if command -v semgrep >/dev/null 2>&1; then
   mkdir -p hook-pack/tools/evil
@@ -626,20 +718,20 @@ if command -v semgrep >/dev/null 2>&1; then
 EOF
   (
     cd hook-pack
-    export OPF_CORE="$OPF_CORE_ROOT"
+    export OPF_ROOT="$OPF_ROOT"
     git add -A
     git -c user.email=test@test -c user.name=test commit -q -m "add evil tool"
   )
   [[ $? -ne 0 ]] \
-    && pass "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged" \
-    || fail "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged"
+    && pass "hook: a real git commit is refused when OPF_ROOT is set and a dangerous pattern is staged" \
+    || fail "hook: a real git commit is refused when OPF_ROOT is set and a dangerous pattern is staged"
   git -C hook-pack log --oneline | grep -q "add evil tool" \
     && fail "hook: the blocked commit did not actually land" \
     || pass "hook: the blocked commit did not actually land"
 
   (
     cd hook-pack
-    export OPF_CORE="$OPF_CORE_ROOT"
+    export OPF_ROOT="$OPF_ROOT"
     git -c user.email=test@test -c user.name=test commit -q -m "bypass test" --no-verify
   )
   [[ $? -eq 0 ]] \

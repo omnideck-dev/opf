@@ -1,6 +1,6 @@
-# opf-core
+# opf
 
-[![opf-core self-test](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml/badge.svg)](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml)
+[![opf self-test](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml/badge.svg)](https://github.com/omnideck-dev/opf/actions/workflows/self-test.yml)
 [![OPF spec](https://img.shields.io/badge/OPF--spec-v1-blueviolet.svg)](spec/opf-spec-v1.md)
 [![License: Apache 2.0](https://img.shields.io/github/license/omnideck-dev/opf)](LICENSE)
 
@@ -24,7 +24,7 @@ Between "one skill file" and "a running tool call" there's a real gap, and there
 
 ## What's in this repo
 
-opf-core ships the spec, the reference tooling, and four operator skills.
+opf ships the spec, the reference tooling, and four operator skills.
 
 ### Skills
 
@@ -44,6 +44,7 @@ opf-core ships the spec, the reference tooling, and four operator skills.
 | [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) | Non-normative: whether something should be a pack at all, structural vs. editorial data, the locked-pack/user-workspace boundary, naming. |
 | [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) | Non-normative: how to decide what goes in one pack vs. several, ownership, the bundle-pack pattern. |
 | [`schema/v1/manifest.schema.json`](schema/v1/manifest.schema.json) | The JSON Schema every `manifest.json` validates against. |
+| [`SECURITY.md`](SECURITY.md) | Threat model, what's built in vs. what isn't, hardening checklist, vulnerability reporting. |
 | [`TODO.md`](TODO.md) | Open implementation and ecosystem work. |
 
 ## Security
@@ -55,21 +56,22 @@ Every install, and every CI run, passes a deterministic scan first - static anal
 - **Registry ruleset - best-effort.** `semgrep --config auto` also runs, as a supplementary, non-blocking pass (it needs network access to semgrep's registry, which not every environment has).
 - **Secrets scanning.** `gitleaks` where it's installed, a regex fallback where it isn't - either way, a pack containing a likely secret is refused.
 - **Three severities, one contract.** `error` blocks install. `warning` requires explicit acknowledgment. `info` is recorded and shown, never blocking. The same validator and the same rules run on your machine and in CI, so what passes locally passes the pipeline.
+- **`install.sh` runs on an empty environment.** The one allowed arbitrary-exec step never sees whatever secrets happen to be exported in the shell that invoked the installer - only spec Section 8.4's `PACK_*`/`config` values, `PATH`/`HOME` (needed to function at all, and neither is a credential), and a narrow non-secret allowlist (`TMPDIR`/`LANG`/`LC_ALL`/`TERM`, when actually set).
 - **Optional pre-commit hook, for fast local feedback.** The template ships `hooks/pre-commit` (enable once per clone with `git config core.hooksPath hooks`) running the same validator, gitleaks, and curated ruleset before a commit lands. It's convenience, not a security boundary - bypassed by `--no-verify`, and not re-enabled automatically on a fresh clone (`pack-doctor` checks for that and can fix it). CI is still the enforced gate.
 
-See spec Section 7 and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2.6 for the full contract.
+See [`SECURITY.md`](SECURITY.md) for the full write-up (threat model, known limitations, hardening checklist, and how to report a vulnerability), spec Section 7 for the normative contract, and [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2.6 for recommended tooling.
 
 ## Using this repo
 
-Two ways to adopt opf-core, and they compose - most orgs start with the first and add the second once they outgrow the defaults.
+Two ways to adopt opf, and they compose - most orgs start with the first and add the second once they outgrow the defaults.
 
-**1. Install it into your harness, then make and share packs.** Point your harness at this repo (a git-native harness with skill auto-discovery needs nothing more than the clone; otherwise set the `OPF_CORE` environment variable to the checkout path). No fork needed. Skim [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) and [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) before scaffolding your first few packs - deciding what should be a pack at all, and what goes in one pack versus several, is cheaper to get right up front than to split apart later.
+**1. Install it into your harness, then make and share packs.** Point your harness at this repo (a git-native harness with skill auto-discovery needs nothing more than the clone; otherwise set the `OPF_ROOT` environment variable to the checkout path). No fork needed. Skim [`spec/opf-pack-authoring.md`](spec/opf-pack-authoring.md) and [`spec/opf-pack-boundaries.md`](spec/opf-pack-boundaries.md) before scaffolding your first few packs - deciding what should be a pack at all, and what goes in one pack versus several, is cheaper to get right up front than to split apart later.
 
-**2. Fork and adapt it for your team or org.** opf-core is public and harness-agnostic by design - forking is expected, not a workaround. Common adaptations (all documented in [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2):
+**2. Fork and adapt it for your team or org.** opf is public and harness-agnostic by design - forking is expected, not a workaround. Common adaptations (all documented in [`spec/opf-host-layout.md`](spec/opf-host-layout.md) Section 2):
 
 - Merge `templates/pack-z-template/` into your fork if a separate template repo is more indirection than you need.
 - Vendor `spec/` and `schema/` into a private repo if your infra can't reach GitHub at build/validate time.
-- Point the CI templates' `OPF_CORE_REPO` / `opf-core-repo` inputs at your fork, so every pack's CI resolves scan rules from it instead of upstream.
+- Point the CI templates' `OPF_REPO` / `opf-repo` inputs at your fork, so every pack's CI resolves scan rules from it instead of upstream.
 - Extend `ci/semgrep-opf-rules.yml` with org-specific rules; start a `pack-common` repo for shared skills/tools once a second pack needs one.
 
 Either way, [`spec/opf-spec-v1.md`](spec/opf-spec-v1.md) is the normative contract - adopt as much or as little of this repo's tooling as you want, as long as you honor the spec.

@@ -19,12 +19,12 @@ dependency closures (step 1); this skill remains the path for that.
 
 ## Working directory assumption
 
-Skills may run with the `OPF_CORE` environment variable pointing at the
-opf-core checkout. If `OPF_CORE` is set, locate the validator and related
-scripts under `$OPF_CORE/scripts/`. Otherwise, locate the scripts relative to
-this skill if it is bundled with opf-core (for example
-`<opf-core>/scripts/validate-pack.sh`). If neither is available, ask the user
-for the opf-core checkout path.
+Skills may run with the `OPF_ROOT` environment variable pointing at the
+opf checkout. If `OPF_ROOT` is set, locate the validator and related
+scripts under `$OPF_ROOT/scripts/`. Otherwise, locate the scripts relative to
+this skill if it is bundled with opf (for example
+`<opf>/scripts/validate-pack.sh`). If neither is available, ask the user
+for the opf checkout path.
 
 ## Trust tier and install location
 
@@ -73,7 +73,7 @@ applies regardless of which location scheme a harness uses.
      installs in place; the target pack is not installed.
 
 2. **Validate the manifest.** Run the validator on the staging directory:
-   `bash <opf-core>/scripts/validate-pack.sh <staging-dir>`. Reject the
+   `bash <opf>/scripts/validate-pack.sh <staging-dir>`. Reject the
    install on any validation failure. Do not proceed past this step on
    failure.
 
@@ -82,7 +82,7 @@ applies regardless of which location scheme a harness uses.
    path.
 
 4. **Scan the staging copy.** Run the static scan on the staging directory:
-   - `semgrep scan --config <opf-core>/ci/semgrep-opf-rules.yml --severity ERROR --error --exclude .opf-env --exclude .opf-lock <staging>`
+   - `semgrep scan --config <opf>/ci/semgrep-opf-rules.yml --severity ERROR --error --exclude .opf-env --exclude .opf-lock <staging>`
      (the curated OPF ruleset - error-class findings here stop the install)
    - `semgrep scan --config auto --error --exclude .opf-env --exclude .opf-lock <staging>`
      (the registry ruleset - not curated to OPF's categories, so findings are

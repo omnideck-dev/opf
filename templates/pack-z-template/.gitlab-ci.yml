@@ -1,5 +1,5 @@
-# Remote-includes opf-core's scan template (validator + shellcheck + semgrep +
+# Remote-includes opf's scan template (validator + shellcheck + semgrep +
 # gitleaks). Do not duplicate that logic here - bump the ref below if you need
-# a different opf-core checkout.
+# a different opf checkout.
 include:
   - remote: 'https://raw.githubusercontent.com/omnideck-dev/opf/main/ci/pack-scan.gitlab-ci.yml'

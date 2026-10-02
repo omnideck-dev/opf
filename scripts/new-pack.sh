@@ -230,7 +230,7 @@ echo "Next steps:"
 echo "  1. Edit $ABS_DEST/manifest.json (set vendor, etc.) if needed."
 echo "  2. Run scripts/validate-pack.sh $ABS_DEST"
 echo "  (CI scanning is already wired up: .github/workflows/scan.yml and"
-echo "  .gitlab-ci.yml both call opf-core's scan template.)"
+echo "  .gitlab-ci.yml both call opf's scan template.)"
 echo
 echo "Note: the secrets gate ran on this pack. Re-run it before publishing if you"
 echo "add files after scaffolding."
