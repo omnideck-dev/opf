@@ -1,7 +1,7 @@
 # Security
 
 OPF's premise is that someone else's code is going to run on your machine -
-a skill, a tool, an `install.sh`. This document describes what opf-core does
+a skill, a tool, an `install.sh`. This document describes what opf does
 about that by default, what it deliberately does not do, and what an
 adopting org can turn on to go further. The normative contract lives in
 [`spec/opf-spec-v1.md`](spec/opf-spec-v1.md) Section 7-8 and
@@ -10,16 +10,16 @@ operator-facing summary and the reporting process.
 
 ## Reporting a vulnerability
 
-Please report suspected vulnerabilities in opf-core's spec, schema, or
+Please report suspected vulnerabilities in opf's spec, schema, or
 tooling privately rather than opening a public issue: open a
-[GitHub Security Advisory](https://github.com/rlnorthcutt/opf-core/security/advisories/new)
+[GitHub Security Advisory](https://github.com/omnideck-dev/opf/security/advisories/new)
 on this repository. Include the affected file(s)/script(s), a minimal
 reproducing pack if applicable, and the impact you'd expect (what a
 malicious pack author or a compromised dependency could do). If you don't
 have GitHub Advisory access, open a regular issue asking for a private
 channel rather than posting exploit details.
 
-This covers opf-core itself (the spec, schema, scripts, skills, CI
+This covers opf itself (the spec, schema, scripts, skills, CI
 templates). It does not cover any specific pack you installed from a
 third party - report that to the pack's own vendor/repository.
 
@@ -186,9 +186,9 @@ Roughly in order of effort-to-value:
    commit it" rather than "clean it up after."
 3. **Wire the CI gate on every pack repo you maintain.** GitHub:
    `.github/workflows/scan.yml` via `uses:`. GitLab:
-   `include: project: opf-core, file: ci/pack-scan.gitlab-ci.yml`. This is
+   `include: project: opf, file: ci/pack-scan.gitlab-ci.yml`. This is
    the single-sourced security gate - a pack repo with no CI wired gets
-   none of this automatically, no matter how good opf-core's tooling is.
+   none of this automatically, no matter how good opf's tooling is.
 4. **Run `pack-doctor` periodically** against your owned and external
    roots. It catches a stale `.opf-lock` left behind in a claimed pack,
    checksum drift against what was actually installed, missing native-tree

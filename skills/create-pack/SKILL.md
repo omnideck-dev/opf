@@ -12,20 +12,20 @@ skill instructs the agent to run `new-pack.sh` and to handle a refusal.
 
 ## Working directory assumption
 
-Skills may run with the `OPF_CORE` environment variable pointing at the
-opf-core checkout. If `OPF_CORE` is set, locate `new-pack.sh` and
-`validate-pack.sh` under `$OPF_CORE/scripts/`, and the template under
-`$OPF_CORE/templates/pack-z-template/`. Otherwise, locate them relative to
-this skill if it is bundled with opf-core (for example
-`<opf-core>/scripts/new-pack.sh`). If neither is available, ask the user for
-the opf-core checkout path.
+Skills may run with the `OPF_ROOT` environment variable pointing at the
+opf checkout. If `OPF_ROOT` is set, locate `new-pack.sh` and
+`validate-pack.sh` under `$OPF_ROOT/scripts/`, and the template under
+`$OPF_ROOT/templates/pack-z-template/`. Otherwise, locate them relative to
+this skill if it is bundled with opf (for example
+`<opf>/scripts/new-pack.sh`). If neither is available, ask the user for
+the opf checkout path.
 
-This matters because opf-core is typically installed once and reused across
+This matters because opf is typically installed once and reused across
 many packs: the checkout is rarely the current working directory when this
 skill runs. The new pack itself is created in the CURRENT working directory
-(`new-pack.sh` scaffolds `./<name>`, not a path relative to opf-core) - `cd`
+(`new-pack.sh` scaffolds `./<name>`, not a path relative to opf) - `cd`
 to wherever the user keeps their packs before running the scaffolder, using
-the opf-core paths above only to locate the tooling itself.
+the opf paths above only to locate the tooling itself.
 
 ## Procedure
 
@@ -41,14 +41,14 @@ the opf-core paths above only to locate the tooling itself.
      step 4, not a file OPF checks for anything. If the user is unsure
      whether this should be a pack at all, a new pack, an addition to an
      existing one, or a dependency-only bundle pack, see
-     `<opf-core>/spec/opf-pack-authoring.md` (what belongs in a pack versus
+     `<opf>/spec/opf-pack-authoring.md` (what belongs in a pack versus
      the tool it drives or the user's workspace, and Section 9 on creating a
-     pack only once it has content) and `<opf-core>/spec/opf-pack-boundaries.md`
+     pack only once it has content) and `<opf>/spec/opf-pack-boundaries.md`
      (dividing work across several packs) before scaffolding - splitting
      later is more work than deciding well up front.
 
 2. **Run the scaffolder.** From the directory where the new pack should be
-   created, run `bash <opf-core>/scripts/new-pack.sh <name> [vendor] -d
+   created, run `bash <opf>/scripts/new-pack.sh <name> [vendor] -d
    "<description>" [--with <kinds>]`, where `<kinds>` is a comma-separated
    list drawn from the item kinds the user selected in step 1 (`tool`,
    `routine`, `agent`, `artifact` - omit `skill` and `data`, which the
@@ -81,7 +81,7 @@ the opf-core paths above only to locate the tooling itself.
    `--allow-secrets`; print the loud warning the script emits.
 
 6. **Point the user at the next steps.** Tell them to run
-   `bash <opf-core>/scripts/validate-pack.sh <pack-dir>`. CI scanning is
+   `bash <opf>/scripts/validate-pack.sh <pack-dir>`. CI scanning is
    already wired up by the template - no separate step needed. If/when
    they `git init` this pack (this skill does not do that for them - see
    `pack-release`'s notes on why), tell them to also run `git config
@@ -95,7 +95,7 @@ the opf-core paths above only to locate the tooling itself.
   must be gitignored.
 - The template's `.gitignore` already excludes `.opf-env`, `.opf-lock`, and
   `.env`. It also ships `.github/workflows/scan.yml` and `.gitlab-ci.yml`,
-  both already wired to opf-core's scan template - a new pack is CI-green on
+  both already wired to opf's scan template - a new pack is CI-green on
   first push with no configuration.
 - The template's README already ships an "Install" section covering
   consumer-facing install and dependency behavior (use `pack-install`,

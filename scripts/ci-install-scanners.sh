@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # ci-install-scanners.sh - install semgrep/gitleaks/shellcheck/jsonschema for
-# opf-core's CI scan templates.
+# opf's CI scan templates.
 #
 # Single source of truth for scanner installation, called by both
 # ci/pack-scan.gitlab-ci.yml and .github/workflows/scan.yml, which both

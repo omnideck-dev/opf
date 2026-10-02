@@ -579,7 +579,7 @@ def tool_entry(result, reason, version=None, ruleset=None):
     return entry
 
 scan = {
-    "semgrep": tool_entry(semgrep_curated_result, semgrep_curated_reason, semgrep_version, "opf-core-v1"),
+    "semgrep": tool_entry(semgrep_curated_result, semgrep_curated_reason, semgrep_version, "opf-v1"),
     "semgrep_registry": tool_entry(semgrep_registry_result, semgrep_registry_reason, semgrep_version, "auto"),
     "gitleaks": tool_entry(gitleaks_result, gitleaks_reason, gitleaks_version),
 }

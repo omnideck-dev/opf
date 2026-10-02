@@ -19,12 +19,12 @@ anything is looking for it.
 
 ## Working directory assumption
 
-Skills may run with the `OPF_CORE` environment variable pointing at the
-opf-core checkout. If `OPF_CORE` is set, locate `pack-doctor.sh` and
-`validate-pack.sh` under `$OPF_CORE/scripts/`. Otherwise, locate them
-relative to this skill if it is bundled with opf-core (for example
-`<opf-core>/scripts/pack-doctor.sh`). If neither is available, ask the user
-for the opf-core checkout path.
+Skills may run with the `OPF_ROOT` environment variable pointing at the
+opf checkout. If `OPF_ROOT` is set, locate `pack-doctor.sh` and
+`validate-pack.sh` under `$OPF_ROOT/scripts/`. Otherwise, locate them
+relative to this skill if it is bundled with opf (for example
+`<opf>/scripts/pack-doctor.sh`). If neither is available, ask the user
+for the opf checkout path.
 
 ## Determining what to scan
 
@@ -47,7 +47,7 @@ recommendation, not a universal location):
 ## Procedure
 
 1. **Run a report-only scan first.** Never pass `--fix` on the first run:
-   `bash <opf-core>/scripts/pack-doctor.sh --owned-root <dir> --external-root <dir> [--native-root <dir>]`.
+   `bash <opf>/scripts/pack-doctor.sh --owned-root <dir> --external-root <dir> [--native-root <dir>]`.
 
 2. **Translate the report into plain language, per pack.** Do not paste
    raw script output at the user. For each pack with findings, summarize

@@ -3,14 +3,14 @@ name: opf-pack-scan
 # This job installs semgrep and gitleaks itself rather than skipping them
 # when absent: this reusable workflow is meant to be the canonical,
 # single-sourced security gate every pack inherits (host-layout doc,
-# "opf-core scan profile"), so it should not silently run structural
+# "opf scan profile"), so it should not silently run structural
 # validation only. shellcheck ships preinstalled on GitHub-hosted
 # ubuntu-latest runners, but the install script still checks for it.
-# The actual install logic lives in opf-core/scripts/ci-install-scanners.sh,
+# The actual install logic lives in opf/scripts/ci-install-scanners.sh,
 # shared with ci/pack-scan.gitlab-ci.yml, so the two templates cannot
 # silently drift to different tool versions or different install behavior.
 #
-# Semgrep runs twice: once against opf-core/ci/semgrep-opf-rules.yml (the
+# Semgrep runs twice: once against opf/ci/semgrep-opf-rules.yml (the
 # curated, offline, spec-Section-7.2-mapped ruleset - CI-blocking on its
 # ERROR-severity rules only), and once against the registry `auto` config
 # (best-effort; non-blocking, since a runner that can't reach semgrep.dev
@@ -19,8 +19,8 @@ name: opf-pack-scan
 on:
   workflow_call:
     inputs:
-      opf-core-repo:
-        description: 'Repository to fetch opf-core (validator) from.'
+      opf-repo:
+        description: 'Repository to fetch opf (validator) from.'
         required: false
         type: string
         default: 'omnideck-dev/opf'
@@ -35,27 +35,27 @@ jobs:
       - name: Checkout pack
         uses: actions/checkout@v4
 
-      - name: Checkout opf-core (validator)
+      - name: Checkout opf (validator)
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.opf-core-repo }}
-          path: opf-core
+          repository: ${{ inputs.opf-repo }}
+          path: opf
 
       - name: Validate pack
-        run: bash opf-core/scripts/validate-pack.sh .
+        run: bash opf/scripts/validate-pack.sh .
 
       - name: Install scanners
-        run: bash opf-core/scripts/ci-install-scanners.sh
+        run: bash opf/scripts/ci-install-scanners.sh
 
       - name: Shellcheck
         run: |
-          sh_files="$(find . -name '*.sh' -not -path './opf-core/*' -not -path './data/*' -not -path './.git/*')"
+          sh_files="$(find . -name '*.sh' -not -path './opf/*' -not -path './data/*' -not -path './.git/*')"
           if [ -n "$sh_files" ]; then echo "$sh_files" | xargs shellcheck; else echo "no shell scripts found; skipping shellcheck"; fi
 
       - name: Semgrep (curated OPF ruleset)
         run: |
-          semgrep scan --config opf-core/ci/semgrep-opf-rules.yml --exclude .opf-env --exclude .opf-lock .
-          semgrep scan --config opf-core/ci/semgrep-opf-rules.yml --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock .
+          semgrep scan --config opf/ci/semgrep-opf-rules.yml --exclude .opf-env --exclude .opf-lock .
+          semgrep scan --config opf/ci/semgrep-opf-rules.yml --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock .
 
       - name: Semgrep (registry auto ruleset, best-effort)
         run: semgrep scan --config auto . || true

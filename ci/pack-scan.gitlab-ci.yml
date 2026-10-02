@@ -5,27 +5,27 @@
 # Usage: in your pack's .gitlab-ci.yml:
 #
 #   include:
-#     - project: 'your-group/opf-core'
+#     - project: 'your-group/opf'
 #       file: '/ci/pack-scan.gitlab-ci.yml'
 #
 # Or copy this file into your pack's .gitlab-ci.yml.
 #
-# The opf-core repo (which provides the validator) is cloned from
-# OPF_CORE_REPO (default https://github.com/omnideck-dev/opf.git).
+# The opf repo (which provides the validator) is cloned from
+# OPF_REPO (default https://github.com/omnideck-dev/opf.git).
 # The validator step always runs; a missing validator is a hard failure.
 #
 # This job installs shellcheck, semgrep, and gitleaks itself rather than
 # skipping them when absent: this CI include is meant to be the canonical,
-# single-sourced security gate every pack inherits (host-layout doc, "opf-core
+# single-sourced security gate every pack inherits (host-layout doc, "opf
 # scan profile"), so it should not silently run structural validation only.
 # Runners that already provide these tools can drop the install step.
 # The image is glibc-based (not alpine) because semgrep's published wheels
 # are manylinux (glibc) only and are unreliable on musl libc.
-# The actual install logic lives in opf-core/scripts/ci-install-scanners.sh,
+# The actual install logic lives in opf/scripts/ci-install-scanners.sh,
 # shared with .github/workflows/scan.yml, so the two templates cannot
 # silently drift to different tool versions or different install behavior.
 #
-# Semgrep runs twice: once against opf-core/ci/semgrep-opf-rules.yml (the
+# Semgrep runs twice: once against opf/ci/semgrep-opf-rules.yml (the
 # curated, offline, spec-Section-7.2-mapped ruleset - CI-blocking on its
 # ERROR-severity rules only), and once against the registry `auto` config
 # (best-effort; `|| true` because a runner that can't reach semgrep.dev,
@@ -38,19 +38,19 @@ pack-scan:
   stage: scan
   image: python:3.12-slim
   variables:
-    OPF_CORE_REPO: "https://github.com/omnideck-dev/opf.git"
+    OPF_REPO: "https://github.com/omnideck-dev/opf.git"
     SHELLCHECK_VERSION: "0.10.0"
     GITLEAKS_VERSION: "8.21.2"
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl ca-certificates >/dev/null
-    - git clone --depth 1 "$OPF_CORE_REPO" opf-core
-    - bash opf-core/scripts/ci-install-scanners.sh
+    - git clone --depth 1 "$OPF_REPO" opf
+    - bash opf/scripts/ci-install-scanners.sh
   script:
-    - bash opf-core/scripts/validate-pack.sh .
+    - bash opf/scripts/validate-pack.sh .
     - |
-      sh_files="$(find . -name '*.sh' -not -path './opf-core/*' -not -path './data/*' -not -path './.git/*')"
+      sh_files="$(find . -name '*.sh' -not -path './opf/*' -not -path './data/*' -not -path './.git/*')"
       if [ -n "$sh_files" ]; then echo "$sh_files" | xargs shellcheck; else echo "no shell scripts found; skipping shellcheck"; fi
-    - semgrep scan --config opf-core/ci/semgrep-opf-rules.yml --exclude .opf-env --exclude .opf-lock .
-    - semgrep scan --config opf-core/ci/semgrep-opf-rules.yml --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock .
+    - semgrep scan --config opf/ci/semgrep-opf-rules.yml --exclude .opf-env --exclude .opf-lock .
+    - semgrep scan --config opf/ci/semgrep-opf-rules.yml --severity ERROR --error --quiet --exclude .opf-env --exclude .opf-lock .
     - semgrep scan --config auto . || true
     - gitleaks detect --source . --no-banner

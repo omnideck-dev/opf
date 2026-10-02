@@ -276,7 +276,7 @@ The External tier and its location are described in the host layout companion do
 
 ## 7. Security scanning on import and install
 
-Every import or install passes a deterministic scan by default: static analysis, not an LLM, so results are reproducible and cannot be talked out of a decision by adversarial content in the pack. The pack-install skill runs the scan before install. The scan runs on the staged/incoming copy in a temporary location before it replaces the installed pack. Findings carry one of three severities: **error** blocks install, **warning** flags the finding for user acknowledgment, and **info** is recorded and shown but never blocks. The manifest-schema and path-safety checks run even with zero tools installed; they are the floor. Recommended tooling lives in the companion doc (`opf-host-layout.md`, "opf-core scan profile"); no specific tool is required to be installed.
+Every import or install passes a deterministic scan by default: static analysis, not an LLM, so results are reproducible and cannot be talked out of a decision by adversarial content in the pack. The pack-install skill runs the scan before install. The scan runs on the staged/incoming copy in a temporary location before it replaces the installed pack. Findings carry one of three severities: **error** blocks install, **warning** flags the finding for user acknowledgment, and **info** is recorded and shown but never blocks. The manifest-schema and path-safety checks run even with zero tools installed; they are the floor. Recommended tooling lives in the companion doc (`opf-host-layout.md`, "opf scan profile"); no specific tool is required to be installed.
 
 - **Manifest schema validation** (Section 4): required fields present, types correct, `version` valid semver, `name` in the allowed charset, `dependencies` well-formed. A manifest that fails is rejected outright. This is the floor; every other check is additive.
 - **Zip-slip path validation**: any embedded file path (from a manifest, an index, or an archive) MUST resolve inside the intended install directory. The harness MUST reject any path that escapes the pack root after normalization. This obligation falls primarily on whatever unpacks an archive (zip/tar) into the pack root: the extractor MUST refuse or normalize any entry path that would resolve outside the destination directory before writing it to disk. A reference implementation's post-extraction directory walk (checking that no file or symlink already inside the extracted pack root resolves outside it) is a secondary sweep for symlinks planted inside a legitimately extracted pack; it cannot detect an entry that already escaped the pack root during a naive extraction, because such a file is no longer inside the tree being walked.
@@ -334,7 +334,7 @@ Lifecycle scripts are the only executable content the spec defines. They are opt
 
 ### 8.1 The pack-install skill
 
-OPF defines one canonical operator skill, shipped in opf-core: `pack-install`. It is an ordinary skill (`SKILL.md` format), so any harness that can run skills and shell commands can use it. OPF requires zero harness-native pack features: validation, scanning, install, and state tracking are all performed by scripts and skills that any harness able to run shell commands and skills can execute.
+OPF defines one canonical operator skill, shipped in opf: `pack-install`. It is an ordinary skill (`SKILL.md` format), so any harness that can run skills and shell commands can use it. OPF requires zero harness-native pack features: validation, scanning, install, and state tracking are all performed by scripts and skills that any harness able to run shell commands and skills can execute.
 
 **pack-install procedure** (deterministic, in order):
 
@@ -452,7 +452,7 @@ The checksums cover pack content. Installer-written state files (`.opf-lock`, `.
 
 ```json
 "scan": {
-  "semgrep": { "version": "1.78.0", "ruleset": "opf-core-v1", "result": "clean" },
+  "semgrep": { "version": "1.78.0", "ruleset": "opf-v1", "result": "clean" },
   "semgrep_registry": { "version": "1.78.0", "ruleset": "auto", "result": "clean" },
   "gitleaks": { "result": "skipped", "reason": "not installed" }
 }
@@ -531,12 +531,12 @@ The recommended host layout profile (the `~/packs/` and `~/.packs-external/` roo
 
 ## 14. Distribution topology
 
-The recommended three-repo distribution topology (opf-core, pack-common, pack-z-template), including the CI include mechanism, the validator, create-pack, and new-pack.sh, is non-normative and lives in the host layout companion doc.
+The recommended three-repo distribution topology (opf, pack-common, pack-z-template), including the CI include mechanism, the validator, create-pack, and new-pack.sh, is non-normative and lives in the host layout companion doc.
 
 ---
 
 ## Appendix A: Per-language static analysis tools
 
-The per-language tool table and the graceful-degradation contract for the scan have moved to the companion doc (`opf-host-layout.md`, "opf-core scan profile"). The normative guarantee is in Section 7.
+The per-language tool table and the graceful-degradation contract for the scan have moved to the companion doc (`opf-host-layout.md`, "opf scan profile"). The normative guarantee is in Section 7.
 
 Container images referenced by a pack SHOULD be pinned by digest, not tag: registries deny unauthenticated tag pulls, and tags are mutable.

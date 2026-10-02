@@ -31,12 +31,12 @@ this skill never touches install-time tier logic itself.
 
 ## Working directory assumption
 
-Skills may run with the `OPF_CORE` environment variable pointing at the
-opf-core checkout. If `OPF_CORE` is set, locate `bump-pack-version.sh` and
-`validate-pack.sh` under `$OPF_CORE/scripts/`. Otherwise, locate them
-relative to this skill if it is bundled with opf-core (for example
-`<opf-core>/scripts/bump-pack-version.sh`). If neither is available, ask the
-user for the opf-core checkout path.
+Skills may run with the `OPF_ROOT` environment variable pointing at the
+opf checkout. If `OPF_ROOT` is set, locate `bump-pack-version.sh` and
+`validate-pack.sh` under `$OPF_ROOT/scripts/`. Otherwise, locate them
+relative to this skill if it is bundled with opf (for example
+`<opf>/scripts/bump-pack-version.sh`). If neither is available, ask the
+user for the opf checkout path.
 
 ## Procedure
 
@@ -59,12 +59,12 @@ user for the opf-core checkout path.
    changelog copy.
 
 3. **Run the bump script.**
-   `bash <opf-core>/scripts/bump-pack-version.sh <pack-dir> <major|minor|patch> --note "<bullet>" [--note "<bullet>" ...]`
+   `bash <opf>/scripts/bump-pack-version.sh <pack-dir> <major|minor|patch> --note "<bullet>" [--note "<bullet>" ...]`
    This updates `manifest.json`'s `version` field and prepends the entry to
    `CHANGELOG.md`. Report the old and new version to the user in plain
    terms ("this ships as 1.3.0, since it adds a new capability").
 
-4. **Validate.** Run `bash <opf-core>/scripts/validate-pack.sh <pack-dir>`.
+4. **Validate.** Run `bash <opf>/scripts/validate-pack.sh <pack-dir>`.
    Translate any errors or warnings into plain language - do not paste raw
    script output at a non-technical user. Do not proceed to commit past an
    error. For a warning, explain what it means and ask whether to proceed.

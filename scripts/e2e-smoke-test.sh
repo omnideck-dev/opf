@@ -26,7 +26,7 @@ VALIDATE="$SCRIPT_DIR/validate-pack.sh"
 INSTALL_PACK="$SCRIPT_DIR/install-pack.sh"
 BUMP_VERSION="$SCRIPT_DIR/bump-pack-version.sh"
 DOCTOR="$SCRIPT_DIR/pack-doctor.sh"
-OPF_CORE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+OPF_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -704,12 +704,12 @@ json.dump(m, open('hook-pack/manifest.json', 'w'))
   git init -q
   git config core.hooksPath hooks
   git add -A
-  unset OPF_CORE
+  unset OPF_ROOT
   git -c user.email=test@test -c user.name=test commit -q -m "initial"
 )
 [[ $? -eq 0 ]] \
-  && pass "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)" \
-  || fail "hook: a commit succeeds when OPF_CORE is unset (graceful degradation, not a hard failure)"
+  && pass "hook: a commit succeeds when OPF_ROOT is unset (graceful degradation, not a hard failure)" \
+  || fail "hook: a commit succeeds when OPF_ROOT is unset (graceful degradation, not a hard failure)"
 
 if command -v semgrep >/dev/null 2>&1; then
   mkdir -p hook-pack/tools/evil
@@ -718,20 +718,20 @@ if command -v semgrep >/dev/null 2>&1; then
 EOF
   (
     cd hook-pack
-    export OPF_CORE="$OPF_CORE_ROOT"
+    export OPF_ROOT="$OPF_ROOT"
     git add -A
     git -c user.email=test@test -c user.name=test commit -q -m "add evil tool"
   )
   [[ $? -ne 0 ]] \
-    && pass "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged" \
-    || fail "hook: a real git commit is refused when OPF_CORE is set and a dangerous pattern is staged"
+    && pass "hook: a real git commit is refused when OPF_ROOT is set and a dangerous pattern is staged" \
+    || fail "hook: a real git commit is refused when OPF_ROOT is set and a dangerous pattern is staged"
   git -C hook-pack log --oneline | grep -q "add evil tool" \
     && fail "hook: the blocked commit did not actually land" \
     || pass "hook: the blocked commit did not actually land"
 
   (
     cd hook-pack
-    export OPF_CORE="$OPF_CORE_ROOT"
+    export OPF_ROOT="$OPF_ROOT"
     git -c user.email=test@test -c user.name=test commit -q -m "bypass test" --no-verify
   )
   [[ $? -eq 0 ]] \

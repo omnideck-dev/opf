@@ -1,4 +1,4 @@
-name: opf-core self-test
+name: opf self-test
 
 # Runs the e2e smoke test against this repo's own scripts on every push/PR.
 # It runs TWICE: once as-is (no scanners installed, exercising the
@@ -20,7 +20,7 @@ jobs:
   self-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout opf-core
+      - name: Checkout opf
         uses: actions/checkout@v4
 
       - name: "Smoke test (degraded: no scanners installed)"
