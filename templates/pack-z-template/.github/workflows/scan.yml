@@ -10,4 +10,4 @@ on:
 
 jobs:
   scan:
-    uses: rlnorthcutt/opf-core/.github/workflows/scan.yml@main
+    uses: omnideck-dev/opf/.github/workflows/scan.yml@main

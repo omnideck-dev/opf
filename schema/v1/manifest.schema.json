@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/opf-core/opf-core/main/schema/v1/manifest.schema.json",
+  "$id": "https://raw.githubusercontent.com/omnideck-dev/opf/main/schema/v1/manifest.schema.json",
   "title": "OPF v1 manifest",
   "description": "JSON Schema for the Open Pack Format (OPF) v1 manifest.json. Unknown top-level fields are preserved and ignored (layering extension path); they must not cause validation errors.",
   "type": "object",

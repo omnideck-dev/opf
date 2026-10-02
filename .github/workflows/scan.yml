@@ -23,7 +23,7 @@ on:
         description: 'Repository to fetch opf-core (validator) from.'
         required: false
         type: string
-        default: 'rlnorthcutt/opf-core'
+        default: 'omnideck-dev/opf'
 
 jobs:
   scan:
